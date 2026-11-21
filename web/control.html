@@ -1183,12 +1183,27 @@
   function renderSource() {}
   function srcVis() { $('manNote').textContent = ''; }
   // ------------------------------------------------------------ panels (Scoring / Graphics / Custom docks)
-  var PANEL = new URLSearchParams(location.search).get('panel') || '';
-  Array.prototype.forEach.call(document.querySelectorAll('[data-panel]'), function (c) {
-    if (PANEL && c.dataset.panel.split(' ').indexOf(PANEL) < 0) c.style.display = 'none';
+  // Tabs switch in place: every card is already on the page, so a mode change only shows and hides cards.
+  // (Reloading the page per tab re-sent the whole state and rebuilt ~13,000 elements: seconds in an OBS dock.)
+  var PANEL = '';
+  function applyPanel(p) {
+    PANEL = p || '';
+    Array.prototype.forEach.call(document.querySelectorAll('[data-panel]'), function (c) {
+      c.style.display = PANEL && c.dataset.panel.split(' ').indexOf(PANEL) < 0 ? 'none' : '';
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('#nav a'), function (a) { a.classList.toggle('sel', a.dataset.p === PANEL); });
+    document.title = PANEL ? 'Graphics: ' + PANEL.charAt(0).toUpperCase() + PANEL.slice(1) : 'Graphics Control';
+  }
+  applyPanel(new URLSearchParams(location.search).get('panel') || '');
+  Array.prototype.forEach.call(document.querySelectorAll('#nav a'), function (a) {
+    a.onclick = function (e) {
+      if (e.ctrlKey || e.metaKey || e.shiftKey || e.button) return;     // still opens in a new window if asked
+      e.preventDefault();
+      applyPanel(a.dataset.p);
+      try { history.replaceState(null, '', a.dataset.p ? '?panel=' + a.dataset.p : location.pathname); } catch (er) {}
+      window.scrollTo(0, 0);
+    };
   });
-  Array.prototype.forEach.call(document.querySelectorAll('#nav a'), function (a) { a.classList.toggle('sel', a.dataset.p === PANEL); });
-  if (PANEL) document.title = 'Graphics: ' + PANEL.charAt(0).toUpperCase() + PANEL.slice(1);
 
   // ------------------------------------------------------------ uploads (logos / backgrounds)
   var upCb = null;

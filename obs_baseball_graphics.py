@@ -47,7 +47,7 @@ except ImportError:  # running standalone
     obs = None
     IN_OBS = False
 
-VERSION = "1.24.0"
+VERSION = "1.25.2"
 # Manual scoring edition: no internet calls at all; every number comes from the control panel.
 EDITION = "manual"
 MANUAL_ONLY = EDITION == "manual"
@@ -3809,8 +3809,9 @@ def _browser_settings(url):
     obs.obs_data_set_string(settings, "url", url)
     obs.obs_data_set_int(settings, "width", 1920)
     obs.obs_data_set_int(settings, "height", 1080)
-    obs.obs_data_set_bool(settings, "fps_custom", True)
-    obs.obs_data_set_int(settings, "fps", 60)
+    # Follow OBS's own frame rate: seven full-HD layers forced to 60 fps on a 30 fps canvas doubled the render work
+    # for nothing and made OBS and its docks sluggish.
+    obs.obs_data_set_bool(settings, "fps_custom", False)
     obs.obs_data_set_bool(settings, "shutdown", False)
     obs.obs_data_set_bool(settings, "restart_when_active", False)
     obs.obs_data_set_string(settings, "css", "body { background-color: rgba(0,0,0,0); margin: 0; overflow: hidden; }")
