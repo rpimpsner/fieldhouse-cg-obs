@@ -1,0 +1,1229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Graphics Editor</title>
+<link rel="stylesheet" href="engine.css">
+<script src="vendor/qrcode.js"></script>
+<script src="engine.js"></script>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #151b24; --panel2: #1c2430; --line: #2a3442; --text: #dde3ea; --dim: #8b97a6;
+    --acc: #f5821f; --blue: #3d8bfd; --ok: #2ecc71; --bad: #e5534b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 13px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+  button, select, input, textarea { font: inherit; color: var(--text); }
+  button { background: var(--panel2); border: 1px solid var(--line); border-radius: 5px; padding: 5px 10px; cursor: pointer; white-space: nowrap; }
+  button:hover { border-color: #3c4a5e; background: #222c3a; }
+  button.primary { background: var(--acc); border-color: var(--acc); color: #10141a; font-weight: 700; }
+  button.ghost { background: transparent; border-color: transparent; padding: 3px 6px; }
+  button.on { background: var(--blue); border-color: var(--blue); color: #fff; }
+  select, input[type=text], input[type=number], textarea { background: #0f141b; border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; min-width: 0; }
+  input[type=number] { width: 100%; }
+  input[type=color] { width: 28px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: none; flex: 0 0 auto; }
+  textarea { width: 100%; resize: vertical; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+  label { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+
+  #app { display: grid; grid-template-rows: 48px 1fr 210px; grid-template-columns: 270px 1fr 330px; height: 100vh; }
+  header { grid-column: 1 / 4; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: var(--panel); border-bottom: 1px solid var(--line); overflow-x: auto; }
+  header h1 { font-size: 14px; margin: 0 8px 0 0; letter-spacing: .5px; white-space: nowrap; }
+  header .sep { width: 1px; height: 24px; background: var(--line); margin: 0 4px; flex: 0 0 auto; }
+  header .grow { flex: 1; }
+  #saveState { color: var(--dim); white-space: nowrap; }
+  #saveState.dirty { color: var(--acc); }
+
+  aside { background: var(--panel); overflow-y: auto; border-right: 1px solid var(--line); }
+  #inspector { border-right: 0; border-left: 1px solid var(--line); grid-row: 2 / 4; grid-column: 3; }
+  #left { grid-row: 2 / 4; grid-column: 1; }
+  .sec { border-bottom: 1px solid var(--line); padding: 10px 12px; }
+  .sec h3 { margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--dim); display: flex; align-items: center; justify-content: space-between; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; }
+  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .f { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .f.full { grid-column: 1 / -1; }
+  .row { display: flex; gap: 6px; align-items: center; }
+  .row > * { min-width: 0; }
+  .chk { display: flex; align-items: center; gap: 6px; color: var(--text); text-transform: none; font-size: 12px; letter-spacing: 0; }
+
+  #layers { list-style: none; margin: 0; padding: 0; }
+  #layers li { display: flex; align-items: center; gap: 6px; padding: 5px 6px; border-radius: 4px; cursor: pointer; }
+  #layers li:hover { background: var(--panel2); }
+  #layers li.sel { background: #23395a; }
+  #layers li .t { font-size: 10px; color: var(--dim); width: 54px; flex: 0 0 auto; text-transform: uppercase; }
+  #layers li .n { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #layers li .ic { opacity: .55; padding: 0 3px; font-size: 12px; }
+  #layers li .ic:hover { opacity: 1; }
+  #layers li.hid .n { opacity: .4; }
+
+  #center { grid-row: 2; grid-column: 2; position: relative; overflow: hidden; background: #0a0d12; }
+  #stageWrap { position: absolute; inset: 36px 12px 12px; }
+  #stageBox { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0;
+    background-color: #2b2f36; background-image: linear-gradient(45deg, #353a42 25%, transparent 25%), linear-gradient(-45deg, #353a42 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #353a42 75%), linear-gradient(-45deg, transparent 75%, #353a42 75%);
+    background-size: 48px 48px; background-position: 0 0, 0 24px, 24px -24px, -24px 0; box-shadow: 0 0 0 1px #000, 0 10px 40px rgba(0,0,0,.5); }
+  #refImg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; display: none; }
+  #stage { position: absolute; inset: 0; }
+  #safe { position: absolute; left: 96px; top: 54px; right: 96px; bottom: 54px; border: 2px dashed rgba(255,255,255,.18); pointer-events: none; display: none; }
+  #gridOv { position: absolute; inset: 0; pointer-events: none; display: none;
+    background-image: linear-gradient(rgba(255,255,255,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.06) 1px, transparent 1px); }
+  #selLayer { position: absolute; inset: 0; cursor: default; }
+  .selbox { position: absolute; outline: 2px solid var(--blue); pointer-events: none; }
+  .selbox.hover { outline: 1px dashed rgba(61,139,253,.7); }
+  .hdl { position: absolute; background: #fff; border: 2px solid var(--blue); pointer-events: auto; }
+  .guide { position: absolute; background: #ff3ea5; pointer-events: none; }
+  #stageBar { position: absolute; left: 12px; right: 12px; top: 6px; display: flex; gap: 8px; align-items: center; color: var(--dim); font-size: 12px; }
+  #stageBar input[type=range] { width: 90px; }
+  #coords { margin-left: auto; font-family: ui-monospace, Consolas, monospace; }
+
+  #timeline { grid-row: 3; grid-column: 2; background: var(--panel); border-top: 1px solid var(--line); display: flex; flex-direction: column; min-width: 0; }
+  #tlHead { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--line); }
+  #tlBody { flex: 1; overflow: auto; position: relative; }
+  #tlRuler, .tlrow { display: flex; }
+  .tlname { flex: 0 0 150px; padding: 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dim); font-size: 12px; position: sticky; left: 0; background: var(--panel); z-index: 2; }
+  .tltrack { position: relative; flex: 1; min-width: 700px; height: 22px; border-bottom: 1px solid #1d2530; }
+  .tlrow.sel .tlname { color: #fff; }
+  .tlrow.sel .tltrack { background: rgba(61,139,253,.07); }
+  .bar { position: absolute; top: 4px; height: 14px; border-radius: 3px; background: var(--acc); cursor: grab; min-width: 4px; }
+  .bar.out { background: #8a6cf0; }
+  .bar.rows { top: 15px; height: 4px; background: #f8c07a; cursor: default; }
+  .bar .rh { position: absolute; right: -3px; top: 0; bottom: 0; width: 8px; cursor: ew-resize; }
+  #tlRuler .tltrack { height: 20px; border-bottom: 1px solid var(--line); }
+  .tick { position: absolute; top: 0; bottom: 0; border-left: 1px solid #2c3746; font-size: 10px; color: var(--dim); padding-left: 3px; }
+  #playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: #ff3ea5; pointer-events: none; display: none; z-index: 3; }
+
+  .colrow { display: grid; grid-template-columns: 1fr 1.3fr 44px 60px 22px; gap: 4px; margin-bottom: 4px; align-items: center; }
+  .cw { display: flex; gap: 4px; align-items: center; }
+  .cw input[type=text] { flex: 1; }
+  .cw .alpha { width: 52px; flex: 0 0 52px; }
+  .hint { color: var(--dim); font-size: 11px; margin-top: 4px; }
+  .empty { color: var(--dim); padding: 20px 12px; text-align: center; }
+  #toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: #23395a; color: #fff; padding: 8px 14px; border-radius: 6px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 99; }
+  #toast.show { opacity: 1; }
+  details summary { cursor: pointer; color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+  .pill { font-size: 10px; padding: 1px 6px; border-radius: 9px; background: var(--panel2); color: var(--dim); }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>GRAPHICS EDITOR</h1>
+    <select id="gSel" title="Graphic"></select>
+    <button id="bNewG" title="New graphic">+ New</button>
+    <button id="bDupG" title="Duplicate graphic">Duplicate</button>
+    <button id="bDelG" title="Delete graphic">Delete</button>
+    <span class="sep"></span>
+    <button id="bPlayIn" class="primary" title="Preview animate in">&#9654; In</button>
+    <button id="bPlayOut" title="Preview animate out">&#9654; Out</button>
+    <button id="bLoop" title="Loop in, hold, out">Loop</button>
+    <select id="speed" title="Preview speed"><option value="1">1x</option><option value="0.5">0.5x</option><option value="0.25">0.25x</option></select>
+    <span class="sep"></span>
+    <select id="dataSel" title="Preview data"><option value="sample">Sample data</option><option value="live">Live game</option></select>
+    <select id="sideSel" title="Team side for team graphics"><option value="home">Home team</option><option value="away">Away team</option></select>
+    <span class="sep"></span>
+    <button id="bUndo" title="Undo (Ctrl+Z)">Undo</button>
+    <button id="bRedo" title="Redo (Ctrl+Y)">Redo</button>
+    <button id="bExport" title="Download templates JSON">Export</button>
+    <button id="bImport" title="Load templates JSON">Import</button>
+    <input type="file" id="fImport" accept=".json,application/json" hidden>
+    <select id="pkgSel" title="Load a graphics package (undo is available until you save)"><option value="">Packages...</option></select>
+    <button id="bReset" title="Restore the default package">Reset</button>
+    <span class="grow"></span>
+    <span id="saveState">Saved</span>
+    <button id="bSave" class="primary" title="Save and push to OBS (Ctrl+S)">Save to OBS</button>
+  </header>
+
+  <aside id="left">
+    <div class="sec">
+      <h3>Graphic</h3>
+      <div class="grid2">
+        <div class="f full"><label>Name</label><input type="text" id="gName"></div>
+        <div class="f"><label>Exclusive group</label><input type="text" id="gGroup" placeholder="lower, full"></div>
+        <div class="f"><label>Auto-hide (sec)</label><input type="number" id="gAuto" min="0" step="1"></div>
+        <div class="f full"><label class="chk"><input type="checkbox" id="gSided"> Team graphic (operator picks a side)</label></div>
+        <div class="f full"><label>Sponsor rule</label><input type="text" id="gSponsor" list="sponsorSlots" placeholder="e.g. half_{halfKey}, scorebug (blank = none)"></div>
+        <div class="f full"><label>Row sponsor rule (tables)</label><input type="text" id="gRowSponsor" placeholder="e.g. lineup_{row.slot}"></div>
+        <div class="f full"><label class="chk"><input type="checkbox" id="gGroupPicker"> Standings group picker in the control panel</label></div>
+        <div class="f full"><label>Default side</label>
+          <select id="gSide"><option value="">None</option><option value="home">Home</option><option value="away">Away</option><option value="batting">Batting team</option><option value="fielding">Fielding team</option></select></div>
+      </div>
+      <div class="hint">Graphics in the same group replace each other when taken. Use <b>team.*</b> bindings on team graphics.</div>
+    </div>
+    <div class="sec">
+      <h3>Layers
+        <select id="addEl" style="width:auto">
+          <option value="">+ Add</option>
+          <option value="box">Box / panel</option>
+          <option value="text">Text</option>
+          <option value="image">Image / logo / photo</option>
+          <option value="video">Video (opener, loop)</option>
+          <option value="bases">Bases diamond</option>
+          <option value="dots">Dots (outs, count)</option>
+          <option value="table">Table (lineup, stats)</option>
+          <option value="field">Defensive field</option>
+          <option value="linescore">Linescore</option>
+        </select>
+      </h3>
+      <ul id="layers"></ul>
+      <div class="hint">Top of the list draws on top. Click to select, drag on the canvas to move, arrow keys nudge (Shift = 10px).</div>
+    </div>
+    <div class="sec">
+      <h3>Theme</h3>
+      <div id="themeBox"></div>
+      <div class="hint">Use <b>$primary</b>, <b>$accent</b> etc. in any color, and add <b>@0.8</b> for transparency.</div>
+    </div>
+  </aside>
+
+  <main id="center">
+    <div id="stageBar">
+      <label class="chk"><input type="checkbox" id="snap" checked> Snap</label>
+      <input type="number" id="snapSize" value="8" min="1" style="width:52px" title="Grid size">
+      <label class="chk"><input type="checkbox" id="showGrid"> Grid</label>
+      <label class="chk"><input type="checkbox" id="showSafe"> Safe area</label>
+      <label class="chk" title="Show the sponsor block with a placeholder when no sponsor is assigned"><input type="checkbox" id="prevSponsor" checked> Sponsor</label>
+      <span class="sep" style="width:1px;height:18px;background:#2a3442"></span>
+      <button id="bRef" title="Load a broadcast screenshot to trace over">Reference image</button>
+      <input type="file" id="fRef" accept="image/*" hidden>
+      <label class="chk"><input type="checkbox" id="refOn" checked> Show</label>
+      <input type="range" id="refOp" min="0" max="1" step="0.05" value="0.5" title="Reference opacity">
+      <select id="refPos" title="Reference layer position"><option value="under">Under graphic</option><option value="over">Over graphic</option></select>
+      <span id="coords"></span>
+    </div>
+    <div id="stageWrap">
+      <div id="stageBox">
+        <img id="refImg" alt="">
+        <div id="gridOv"></div>
+        <div id="stage" class="gx-stage"></div>
+        <div id="safe"></div>
+        <div id="selLayer"></div>
+      </div>
+    </div>
+  </main>
+
+  <section id="timeline">
+    <div id="tlHead">
+      <b style="font-size:12px;letter-spacing:1px;color:#8b97a6">TIMING</b>
+      <button id="tlIn" class="on">In</button>
+      <button id="tlOut">Out</button>
+      <span class="hint" style="margin:0">Drag a bar to change its delay, drag its right edge to change duration. Shift snaps to 50 ms.</span>
+      <span class="grow" style="flex:1"></span>
+      <span id="tlTotal" class="pill"></span>
+    </div>
+    <div id="tlBody"><div id="playhead"></div><div id="tlRuler"></div><div id="tlRows"></div></div>
+  </section>
+
+  <aside id="inspector"><div class="empty">Select a layer to edit it.</div></aside>
+</div>
+<div id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var DOC = null, DEFAULT_DOC = null, GID = null, SEL = null;
+  var SAMPLE = null, LIVE = null, UI = { sides: {}, custom: {} };
+  var HIST = [], FUT = [], lastSnap = 0, DIRTY = false;
+  var GR = null, K = 1, hiddenIds = {}, lockedIds = {};
+  var tlMode = 'in', playing = null;
+  var TL_SCALE = 0.35;  // px per ms
+  var NAME_W = 150;
+
+  // ---------------------------------------------------------------- utils
+  function toast(msg) { var t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(function () { t.classList.remove('show'); }, 1800); }
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  function def() { return DOC.graphics[GID]; }
+  function theme() { return DOC.theme || {}; }
+  function elById(id) { return (def().elements || []).find(function (e) { return e.id === id; }); }
+  function getPath(o, p) { return p.split('.').reduce(function (a, k) { return a == null ? undefined : a[k]; }, o); }
+  function setPath(o, p, v) {
+    var ks = p.split('.'), last = ks.pop();
+    var t = ks.reduce(function (a, k) { if (a[k] == null || typeof a[k] !== 'object') a[k] = {}; return a[k]; }, o);
+    if (v === undefined || v === '') delete t[last]; else t[last] = v;
+  }
+  function uid(type) { return type + '_' + Math.random().toString(36).slice(2, 8); }
+  function snapV(v) { var s = parseInt($('snapSize').value, 10) || 1; return $('snap').checked ? Math.round(v / s) * s : Math.round(v); }
+
+  function snapshot(force) {
+    var now = Date.now();
+    if (!force && now - lastSnap < 600) { setDirty(); return; }
+    lastSnap = now;
+    HIST.push(JSON.stringify(DOC));
+    if (HIST.length > 150) HIST.shift();
+    FUT = [];
+    setDirty();
+  }
+  function setDirty() { DIRTY = true; $('saveState').textContent = 'Unsaved changes'; $('saveState').className = 'dirty'; }
+  function undo() { if (!HIST.length) return; FUT.push(JSON.stringify(DOC)); DOC = JSON.parse(HIST.pop()); afterDocSwap(); }
+  function redo() { if (!FUT.length) return; HIST.push(JSON.stringify(DOC)); DOC = JSON.parse(FUT.pop()); afterDocSwap(); }
+  function afterDocSwap() { if (!DOC.graphics[GID]) GID = Object.keys(DOC.graphics)[0]; if (SEL && !elById(SEL)) SEL = null; setDirty(); renderAll(); }
+
+  function game() { return $('dataSel').value === 'live' && LIVE ? LIVE : SAMPLE; }
+  function ctx() {
+    var ui = clone(UI);
+    ui.sides = ui.sides || {};
+    ui.sides[GID] = $('sideSel').value;
+    if (!ui.custom || !ui.custom.line1) ui.custom = { line1: 'Custom headline', line2: 'Second line of custom text', line3: '' };
+    var real = GFX.sponsorFor(ui, def().sponsorSlot, null, game() || {});
+    if (!real.on && $('prevSponsor').checked && (def().sponsorSlot || def().rowSponsors)) ui.previewSponsor = { on: true, id: 'preview', name: 'Sponsor Name', logo: '', label: 'Presented by' };
+    return GFX.makeCtx(game(), ui, GID, def(), theme());
+  }
+
+  // --------------------------------------------------------------- stage
+  function fitStage() {
+    var w = $('stageWrap').clientWidth, h = $('stageWrap').clientHeight;
+    K = Math.min(w / 1920, h / 1080);
+    var box = $('stageBox');
+    box.style.transform = 'scale(' + K + ')';
+    box.style.left = ((w - 1920 * K) / 2) + 'px';
+    box.style.top = ((h - 1080 * K) / 2) + 'px';
+    drawSelection();
+  }
+
+  function renderStage() {
+    if (GR) GR.destroy();
+    var d = clone(def());
+    d.elements = (d.elements || []).filter(function (e) { return !hiddenIds[e.id]; });
+    GR = new GFX.Graphic($('stage'), GID, d, theme());
+    GR.build(ctx());
+    GR.show(true);
+    drawSelection();
+  }
+
+  function stageXY(ev) {
+    var r = $('stageBox').getBoundingClientRect();
+    return { x: (ev.clientX - r.left) / K, y: (ev.clientY - r.top) / K };
+  }
+
+  function hitTest(pt) {
+    var els = (def().elements || []);
+    var order = els.map(function (e, i) { return { e: e, i: i }; })
+      .sort(function (a, b) { return (b.e.z || 0) - (a.e.z || 0) || b.i - a.i; });
+    for (var k = 0; k < order.length; k++) {
+      var e = order[k].e;
+      if (hiddenIds[e.id] || lockedIds[e.id]) continue;
+      var node = GR && GR.nodes.find(function (n) { return n._el && n._el.id === e.id; });
+      if (node && node.style.display === 'none') continue;   // hidden by its showIf condition
+      if (pt.x >= e.x && pt.x <= e.x + e.w && pt.y >= e.y && pt.y <= e.y + e.h) return e;
+    }
+    return null;
+  }
+
+  function drawSelection(hover) {
+    var L = $('selLayer');
+    L.innerHTML = '';
+    if (hover && (!SEL || hover.id !== SEL)) {
+      var hb = document.createElement('div');
+      hb.className = 'selbox hover';
+      place(hb, hover);
+      L.appendChild(hb);
+    }
+    var e = SEL && elById(SEL);
+    if (!e) return;
+    var b = document.createElement('div');
+    b.className = 'selbox';
+    b.style.outlineWidth = (2 / K) + 'px';
+    place(b, e);
+    L.appendChild(b);
+    if (lockedIds[e.id]) return;
+    var hs = 10 / K;
+    ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].forEach(function (h) {
+      var d = document.createElement('div');
+      d.className = 'hdl';
+      d.dataset.h = h;
+      d.style.width = d.style.height = hs + 'px';
+      d.style.borderWidth = (2 / K) + 'px';
+      var cx = h.indexOf('w') >= 0 ? e.x : (h.indexOf('e') >= 0 ? e.x + e.w : e.x + e.w / 2);
+      var cy = h.indexOf('n') >= 0 ? e.y : (h.indexOf('s') >= 0 ? e.y + e.h : e.y + e.h / 2);
+      d.style.left = (cx - hs / 2) + 'px';
+      d.style.top = (cy - hs / 2) + 'px';
+      d.style.cursor = { n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize', nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize' }[h];
+      L.appendChild(d);
+    });
+  }
+  function place(n, e) { n.style.left = e.x + 'px'; n.style.top = e.y + 'px'; n.style.width = e.w + 'px'; n.style.height = e.h + 'px'; }
+
+  function moveLive(e) {
+    // Fast path while dragging: move the rendered wrapper without a rebuild.
+    if (!GR) return;
+    var w = GR.nodes.find(function (n) { return n._el && n._el.id === e.id; });
+    if (w) { w._el.x = e.x; w._el.y = e.y; w._el.w = e.w; w._el.h = e.h; GFX.paint(w, w._el, GR.ctx, theme()); }
+    drawSelection();
+    updateLayoutInputs(e);
+  }
+
+  function showGuides(e) {
+    var L = $('selLayer');
+    L.querySelectorAll('.guide').forEach(function (g) { g.remove(); });
+    var cx = e.x + e.w / 2, cy = e.y + e.h / 2;
+    function line(vert, pos) {
+      var g = document.createElement('div');
+      g.className = 'guide';
+      if (vert) { g.style.left = pos + 'px'; g.style.top = 0; g.style.width = (1 / K) + 'px'; g.style.height = '1080px'; }
+      else { g.style.top = pos + 'px'; g.style.left = 0; g.style.height = (1 / K) + 'px'; g.style.width = '1920px'; }
+      L.appendChild(g);
+    }
+    if (Math.abs(cx - 960) < 1) line(true, 960);
+    if (Math.abs(cy - 540) < 1) line(false, 540);
+  }
+
+  function initStageEvents() {
+    var L = $('selLayer');
+    var drag = null;
+    L.addEventListener('mousedown', function (ev) {
+      if (ev.button !== 0) return;
+      var pt = stageXY(ev);
+      var h = ev.target.dataset && ev.target.dataset.h;
+      var e = SEL && elById(SEL);
+      if (!h) {
+        var hit = hitTest(pt);
+        if (!hit) { SEL = null; renderAll(); return; }
+        if (hit.id !== SEL) { SEL = hit.id; renderLayers(); renderInspector(); renderTimeline(); }
+        e = hit;
+      }
+      snapshot(true);
+      drag = { h: h || 'move', start: pt, orig: { x: e.x, y: e.y, w: e.w, h: e.h }, el: e };
+      drawSelection();
+      ev.preventDefault();
+    });
+    window.addEventListener('mousemove', function (ev) {
+      var pt = stageXY(ev);
+      if (pt.x >= 0 && pt.y >= 0 && pt.x <= 1920 && pt.y <= 1080) $('coords').textContent = Math.round(pt.x) + ', ' + Math.round(pt.y);
+      if (!drag) {
+        if (ev.target === L || L.contains(ev.target)) drawSelection(hitTest(pt));
+        return;
+      }
+      var dx = pt.x - drag.start.x, dy = pt.y - drag.start.y, o = drag.orig, e = drag.el, h = drag.h;
+      if (h === 'move') {
+        e.x = snapV(o.x + dx); e.y = snapV(o.y + dy);
+        // center snapping
+        if (Math.abs(e.x + e.w / 2 - 960) < 8 / K) e.x = Math.round(960 - e.w / 2);
+        if (Math.abs(e.y + e.h / 2 - 540) < 8 / K) e.y = Math.round(540 - e.h / 2);
+      } else {
+        var x1 = o.x, y1 = o.y, x2 = o.x + o.w, y2 = o.y + o.h;
+        if (h.indexOf('w') >= 0) x1 = snapV(o.x + dx);
+        if (h.indexOf('e') >= 0) x2 = snapV(o.x + o.w + dx);
+        if (h.indexOf('n') >= 0) y1 = snapV(o.y + dy);
+        if (h.indexOf('s') >= 0) y2 = snapV(o.y + o.h + dy);
+        if (ev.shiftKey && h.length === 2) { var ar = o.w / o.h; var nw = x2 - x1; var nh = nw / ar; if (h.indexOf('n') >= 0) y1 = y2 - nh; else y2 = y1 + nh; }
+        e.x = Math.min(x1, x2 - 2); e.y = Math.min(y1, y2 - 2);
+        e.w = Math.max(2, Math.round(x2 - x1)); e.h = Math.max(2, Math.round(y2 - y1));
+      }
+      moveLive(e);
+      showGuides(e);
+      setDirty();
+    });
+    window.addEventListener('mouseup', function () {
+      if (drag) { drag = null; renderStage(); }
+    });
+  }
+
+  // -------------------------------------------------------------- layers
+  function renderGraphicSelect() {
+    var s = $('gSel');
+    s.innerHTML = '';
+    Object.keys(DOC.graphics).forEach(function (gid) {
+      var o = document.createElement('option');
+      o.value = gid;
+      o.textContent = (DOC.graphics[gid].name || gid) + '  (' + gid + ')';
+      s.appendChild(o);
+    });
+    s.value = GID;
+  }
+
+  function renderGraphicSettings() {
+    var d = def();
+    $('gName').value = d.name || '';
+    $('gGroup').value = d.group || '';
+    $('gAuto').value = d.autoHide || 0;
+    $('gSided').checked = !!d.sided;
+    $('gSide').value = d.side || '';
+    $('gSponsor').value = d.sponsorSlot || '';
+    $('gRowSponsor').value = d.rowSponsors || '';
+    $('gGroupPicker').checked = !!d.groupPicker;
+    var dl = document.getElementById('sponsorSlots');
+    if (dl) dl.innerHTML = Array.from(new Set(Object.keys(DOC.graphics).map(function (k) { return DOC.graphics[k].sponsorSlot; }).filter(Boolean)
+      .concat(['scorebug', 'batter', 'pitcher', 'batter_card', 'pitcher_card', 'half_{halfKey}, scorebug', 'lineup_{batter.slot}, batter']))).map(function (x) { return '<option value="' + x + '">'; }).join('');
+  }
+
+  var TYPE_LABEL = { box: 'Box', text: 'Text', image: 'Image', video: 'Video', bases: 'Bases', dots: 'Dots', table: 'Table', field: 'Field', linescore: 'Linescore' };
+
+  function renderLayers() {
+    var ul = $('layers');
+    ul.innerHTML = '';
+    var els = def().elements || [];
+    for (var i = els.length - 1; i >= 0; i--) {
+      (function (e, i) {
+        var li = document.createElement('li');
+        if (e.id === SEL) li.className = 'sel';
+        if (hiddenIds[e.id]) li.classList.add('hid');
+        li.innerHTML = '<span class="t">' + TYPE_LABEL[e.type] + '</span><span class="n"></span>' +
+          '<span class="ic" data-a="up" title="Bring forward">&#9650;</span><span class="ic" data-a="down" title="Send back">&#9660;</span>' +
+          '<span class="ic" data-a="eye" title="Hide in editor">' + (hiddenIds[e.id] ? '&#9711;' : '&#9673;') + '</span>' +
+          '<span class="ic" data-a="lock" title="Lock on canvas">' + (lockedIds[e.id] ? '&#128274;' : '&#128275;') + '</span>';
+        li.querySelector('.n').textContent = e.name || e.id;
+        li.onclick = function (ev) {
+          var a = ev.target.dataset.a;
+          if (a === 'up' && i < els.length - 1) { snapshot(true); els.splice(i + 1, 0, els.splice(i, 1)[0]); renderAll(); return; }
+          if (a === 'down' && i > 0) { snapshot(true); els.splice(i - 1, 0, els.splice(i, 1)[0]); renderAll(); return; }
+          if (a === 'eye') { hiddenIds[e.id] = !hiddenIds[e.id]; renderAll(); return; }
+          if (a === 'lock') { lockedIds[e.id] = !lockedIds[e.id]; renderLayers(); drawSelection(); return; }
+          SEL = e.id; renderLayers(); renderInspector(); renderTimeline(); drawSelection();
+        };
+        ul.appendChild(li);
+      })(els[i], i);
+    }
+  }
+
+  function addElement(type) {
+    var base = clone(GFX.ELEMENT_DEFAULTS[type]);
+    var e = Object.assign({ id: uid(type), name: TYPE_LABEL[type], type: type, x: 760, y: 440, anim: { 'in': { type: 'fade', dur: 400, delay: 0, ease: 'out' }, out: { type: 'auto', dur: 280, delay: 0, ease: 'in' } } }, base);
+    e.x = Math.round(960 - e.w / 2); e.y = Math.round(540 - e.h / 2);
+    if (type === 'table' || type === 'field' || type === 'linescore') e.anim.rows = { type: type === 'field' ? 'pop' : 'slide-left', dur: 300, stagger: 60, delay: 150, dist: 40 };
+    snapshot(true);
+    def().elements = def().elements || [];
+    def().elements.push(e);
+    SEL = e.id;
+    renderAll();
+  }
+
+  // ----------------------------------------------------------- inspector
+  var COLOR_TOKENS = ['$primary', '$accent', '$text', '$panel', '$panel2', '{home.color}', '{away.color}', '{team.color}', '{team.color2}', '{batting.color}', '{fielding.color}', 'transparent'];
+  var FONT_WEIGHTS = [300, 400, 500, 600, 700, 800, 900];
+
+  var SCHEMA = {
+    box: [['Fill', 'style.fill', 'color'], ['CSS background (gradients)', 'style.background', 'text', 'linear-gradient(90deg, $primary, transparent)'],
+      ['Corner radius', 'style.radius', 'number'], ['Backdrop blur', 'style.blur', 'number'], ['Border width', 'style.borderW', 'number'], ['Border color', 'style.borderColor', 'color'],
+      ['Skew (deg)', 'style.skew', 'number'], ['Rotate box (deg)', 'style.rotate', 'number'], ['Angled cut (px)', 'style.cut', 'number'], ['Drop shadow', 'style.shadow', 'bool']],
+    text: [['Text (use {bindings})', 'text', 'bindtext'], ['Color', 'style.color', 'color'], ['Size', 'style.size', 'number'], ['Weight', 'style.weight', 'weight'],
+      ['Align', 'style.align', ['left', 'center', 'right']], ['Vertical', 'style.valign', ['top', 'center', 'bottom']], ['Padding X', 'style.padX', 'number'],
+      ['Letter spacing', 'style.tracking', 'number'], ['Line height', 'style.lineH', 'number'], ['Font (blank = theme $font)', 'style.font', 'text', '$font'], ['Background', 'style.fill', 'color'],
+      ['Shrink to fit', 'style.fit', 'bool'], ['Uppercase', 'style.upper', 'bool'], ['Italic', 'style.italic', 'bool'], ['Text shadow', 'style.textShadow', 'bool'], ['Wrap lines', 'style.wrap', 'bool']],
+    image: [['Image URL (or {binding})', 'src', 'bindtext'], ['Fit', 'style.fit', ['cover', 'contain', 'fill']], ['Focus', 'style.focus', ['center top', 'center', 'center bottom']],
+      ['Corner radius', 'style.radius', 'number'], ['Background', 'style.fill', 'color'],
+      ['Soft edge', 'style.maskFade', ['', 'left', 'right', 'top', 'bottom']], ['Soft edge size (%)', 'style.maskSize', 'number'], ['Grayscale', 'style.grayscale', 'bool']],
+    video: [['Video URL (e.g. /media/videos/opener.webm)', 'src', 'bindtext'], ['Fit', 'style.fit', ['cover', 'contain', 'fill']],
+      ['Loop', 'loop', 'bool'], ['Play sound', 'sound', 'bool'], ['Corner radius', 'style.radius', 'number']],
+    bases: [['Data', 'bind', 'text', 'bases'], ['Layout', 'style.layout', ['classic', 'tight']], ['Occupied', 'style.on', 'color'], ['Empty', 'style.off', 'color'], ['Outline', 'style.stroke', 'color'], ['Outline width', 'style.strokeW', 'number']],
+    dots: [['Data (number)', 'bind', ['outs', 'balls', 'strikes']], ['Total dots', 'style.total', 'number'], ['Dot size', 'style.size', 'number'], ['Gap', 'style.gap', 'number'],
+      ['On', 'style.on', 'color'], ['Off', 'style.off', 'color'], ['Ring', 'style.border', 'color'], ['Shape', 'style.shape', ['circle', 'square']],
+      ['Align', 'style.align', ['left', 'center', 'right']], ['Direction', 'style.dir', ['row', 'col']]],
+    table: [['Rows from', 'bind', ['team.lineup', 'team.pitchers', 'team.dueUp', 'away.lineup', 'home.lineup', 'away.pitchers', 'home.pitchers']],
+      ['Columns', 'columns', 'columns'], ['Row height', 'style.rowH', 'number'], ['Font size', 'style.size', 'number'], ['Weight', 'style.weight', 'weight'],
+      ['Text color', 'style.color', 'color'], ['Row fill', 'style.rowFill', 'color'], ['Alternate fill', 'style.altFill', 'color'], ['Row gap', 'style.gap', 'number'],
+      ['Padding X', 'style.padX', 'number'], ['Max rows', 'style.maxRows', 'number'], ['Show header', 'style.header', 'bool'], ['Header height', 'style.headerH', 'number'],
+      ['Header size', 'style.headerSize', 'number'], ['Header color', 'style.headerColor', 'color'], ['Header fill', 'style.headerFill', 'color'],
+      ['Highlight rows where', 'style.highlight', ['', 'isCurrent', 'sub']], ['Highlight fill', 'style.highlightFill', 'color'],
+      ['Row divider color', 'style.rowLine', 'color'], ['Row divider width', 'style.rowLineW', 'number'], ['Row corner radius', 'style.radius', 'number'], ['Font', 'style.font', 'text', '$font']],
+    field: [['Data', 'bind', ['team.defense', 'home.defense', 'away.defense']], ['Grass', 'style.grass', 'color'], ['Dirt', 'style.dirt', 'color'], ['Lines', 'style.line', 'color'],
+      ['Label fill', 'style.labelFill', 'color'], ['Name color', 'style.nameColor', 'color'], ['Position color', 'style.posColor', 'color'], ['Label size', 'style.size', 'number'],
+      ['Show', 'style.nameField', ['last', 'name']], ['Font', 'style.font', 'text', '$font']],
+    linescore: [['Font size', 'style.size', 'number'], ['Text color', 'style.color', 'color'], ['Header color', 'style.headColor', 'color'], ['Header size', 'style.headSize', 'number'],
+      ['Row fill', 'style.rowFill', 'color'], ['R H E fill', 'style.totalFill', 'color'], ['Current inning', 'style.current', 'color'], ['Min innings', 'style.minInnings', 'number'],
+      ['Team column width', 'style.teamW', 'number'], ['Font', 'style.font', 'text', '$font']]
+  };
+
+  function field(label, path, kind, ph, e) {
+    var wrap = document.createElement('div');
+    wrap.className = 'f';
+    var val = getPath(e, path);
+    if (kind === 'bool') {
+      wrap.innerHTML = '<label class="chk"><input type="checkbox"> ' + label + '</label>';
+      var cb = wrap.querySelector('input');
+      cb.checked = !!val;
+      cb.onchange = function () { change(path, cb.checked || undefined); };
+      return wrap;
+    }
+    wrap.innerHTML = '<label></label>';
+    wrap.querySelector('label').textContent = label;
+    var inp;
+    if (Array.isArray(kind)) {
+      inp = document.createElement('select');
+      kind.forEach(function (o) { var op = document.createElement('option'); op.value = o; op.textContent = o === '' ? '(none)' : o; inp.appendChild(op); });
+      if (val != null && kind.indexOf(val) < 0) { var op2 = document.createElement('option'); op2.value = val; op2.textContent = val; inp.appendChild(op2); }
+      inp.value = val == null ? kind[0] : val;
+      inp.onchange = function () { change(path, inp.value); };
+    } else if (kind === 'weight') {
+      inp = document.createElement('select');
+      FONT_WEIGHTS.forEach(function (w) { var op = document.createElement('option'); op.value = w; op.textContent = w; inp.appendChild(op); });
+      inp.value = val || 700;
+      inp.onchange = function () { change(path, parseInt(inp.value, 10)); };
+    } else if (kind === 'number') {
+      inp = document.createElement('input');
+      inp.type = 'number';
+      inp.value = val == null ? '' : val;
+      inp.oninput = function () { change(path, inp.value === '' ? undefined : Number(inp.value)); };
+    } else if (kind === 'color') {
+      return colorField(label, path, val);
+    } else if (kind === 'bindtext') {
+      wrap.classList.add('full');
+      inp = document.createElement('textarea');
+      inp.rows = 2;
+      inp.value = val || '';
+      inp.oninput = function () { change(path, inp.value); };
+      wrap.appendChild(inp);
+      wrap.appendChild(bindPicker(inp, path));
+      return wrap;
+    } else if (kind === 'columns') {
+      wrap.classList.add('full');
+      wrap.appendChild(columnsEditor(e));
+      return wrap;
+    } else {
+      inp = document.createElement('input');
+      inp.type = 'text';
+      inp.placeholder = ph || '';
+      inp.value = val == null ? '' : val;
+      inp.oninput = function () { change(path, inp.value); };
+      if (/\.font$/.test(path)) { inp.setAttribute('list', 'fontList'); wrap.classList.add('full'); inp.placeholder = '$font, $font2, an installed font or an uploaded font'; }
+      if (path.indexOf('background') >= 0 || path === 'showIf') wrap.classList.add('full');
+    }
+    wrap.appendChild(inp);
+    return wrap;
+  }
+
+  function splitAlpha(v) {
+    var m = String(v || '').match(/^(.*)@(\d*\.?\d+)$/);
+    return m ? { base: m[1], a: m[2] } : { base: String(v || ''), a: '' };
+  }
+
+  function colorField(label, path, val) {
+    var wrap = document.createElement('div');
+    wrap.className = 'f full';
+    wrap.innerHTML = '<label></label><div class="cw"><input type="color"><input type="text" list="colorTokens"><input type="number" class="alpha" min="0" max="1" step="0.05" placeholder="alpha"></div>';
+    wrap.querySelector('label').textContent = label;
+    var sw = wrap.querySelector('input[type=color]'), tx = wrap.querySelector('input[type=text]'), al = wrap.querySelector('.alpha');
+    var p = splitAlpha(val);
+    tx.value = p.base; al.value = p.a;
+    function resolvedHex() {
+      var c = GFX.color(tx.value, ctx(), theme());
+      return /^#[0-9a-f]{6}$/i.test(c) ? c : (/^#[0-9a-f]{3}$/i.test(c) ? '#' + c.slice(1).split('').map(function (x) { return x + x; }).join('') : '#000000');
+    }
+    sw.value = resolvedHex();
+    function push() { var v = tx.value.trim(); if (v && al.value !== '') v += '@' + al.value; change(path, v || undefined); sw.value = resolvedHex(); }
+    sw.oninput = function () { tx.value = sw.value.toUpperCase(); push(); };
+    tx.oninput = push;
+    al.oninput = push;
+    return wrap;
+  }
+
+  function bindPicker(target, path) {
+    var s = document.createElement('select');
+    s.innerHTML = '<option value="">+ Insert data field</option>';
+    GFX.BINDINGS.forEach(function (grp) {
+      var og = document.createElement('optgroup');
+      og.label = grp[0];
+      grp[1].forEach(function (b) { var o = document.createElement('option'); o.value = b[0]; o.textContent = b[1] + '   {' + b[0] + '}'; og.appendChild(o); });
+      s.appendChild(og);
+    });
+    s.onchange = function () {
+      if (!s.value) return;
+      var tok = '{' + s.value + '}';
+      var st = target.selectionStart != null ? target.selectionStart : target.value.length;
+      var en = target.selectionEnd != null ? target.selectionEnd : st;
+      target.value = target.value.slice(0, st) + tok + target.value.slice(en);
+      s.value = '';
+      change(path, target.value);
+    };
+    var box = document.createElement('div');
+    box.style.marginTop = '4px';
+    box.appendChild(s);
+    var h = document.createElement('div');
+    h.className = 'hint';
+    h.innerHTML = 'Filters: <b>|upper</b> <b>|avg</b> <b>|era</b> <b>|last</b> <b>|initial</b> <b>|num</b> <b>|ord</b> <b>|zero</b> <b>|hand</b>';
+    box.appendChild(h);
+    return box;
+  }
+
+  function columnsEditor(e) {
+    var box = document.createElement('div');
+    function draw() {
+      box.innerHTML = '<div class="colrow" style="color:#8b97a6;font-size:10px"><span>HEADER</span><span>FIELD</span><span>WIDTH</span><span>ALIGN</span><span></span></div>';
+      (e.columns || []).forEach(function (c, i) {
+        var r = document.createElement('div');
+        r.className = 'colrow';
+        r.innerHTML = '<input type="text" data-k="label"><input type="text" data-k="field" list="rowFields"><input type="number" step="0.1" data-k="w">' +
+          '<select data-k="align"><option>left</option><option>center</option><option>right</option></select><button class="ghost" title="Remove">&times;</button>';
+        r.querySelectorAll('[data-k]').forEach(function (inp) {
+          inp.value = c[inp.dataset.k] == null ? '' : c[inp.dataset.k];
+          inp.oninput = inp.onchange = function () {
+            snapshot();
+            c[inp.dataset.k] = inp.dataset.k === 'w' ? Number(inp.value) || 1 : inp.value;
+            renderStage();
+          };
+        });
+        r.querySelector('button').onclick = function () { snapshot(true); e.columns.splice(i, 1); draw(); renderStage(); };
+        box.appendChild(r);
+      });
+      var add = document.createElement('button');
+      add.textContent = '+ Column';
+      add.onclick = function () { snapshot(true); e.columns = e.columns || []; e.columns.push({ label: 'NEW', field: '{row.name}', w: 1, align: 'center' }); draw(); renderStage(); };
+      box.appendChild(add);
+      var h = document.createElement('div');
+      h.className = 'hint';
+      h.textContent = 'Field is a row key (avg, pos) or a template like {row.avg|avg}.';
+      box.appendChild(h);
+    }
+    draw();
+    return box;
+  }
+
+  function change(path, value) {
+    var e = elById(SEL);
+    if (!e) return;
+    snapshot();
+    setPath(e, path, value);
+    if (path === 'name') renderLayers();
+    renderStage();
+    if (path.indexOf('anim') === 0) renderTimeline();
+  }
+
+  function section(title, open) {
+    var s = document.createElement('div');
+    s.className = 'sec';
+    s.innerHTML = '<h3></h3><div class="grid2"></div>';
+    s.querySelector('h3').textContent = title;
+    return s;
+  }
+
+  function updateLayoutInputs(e) {
+    ['x', 'y', 'w', 'h'].forEach(function (k) { var i = document.querySelector('#inspector [data-lay="' + k + '"]'); if (i && document.activeElement !== i) i.value = Math.round(e[k]); });
+  }
+
+  function renderInspector() {
+    var box = $('inspector');
+    box.innerHTML = '';
+    var e = SEL && elById(SEL);
+    if (!e) { box.innerHTML = '<div class="empty">Select a layer to edit it, or add one from the Layers menu.</div>'; return; }
+
+    var s0 = section(TYPE_LABEL[e.type] + ' layer');
+    var g0 = s0.querySelector('.grid2');
+    var nm = field('Layer name', 'name', 'text', '', e); nm.classList.add('full'); g0.appendChild(nm);
+    var lay = document.createElement('div');
+    lay.className = 'grid4';
+    lay.style.gridColumn = '1 / -1';
+    ['x', 'y', 'w', 'h'].forEach(function (k) {
+      var f = document.createElement('div');
+      f.className = 'f';
+      f.innerHTML = '<label>' + k.toUpperCase() + '</label><input type="number" data-lay="' + k + '">';
+      var inp = f.querySelector('input');
+      inp.value = Math.round(e[k]);
+      inp.oninput = function () { change(k, Number(inp.value) || 0); drawSelection(); };
+      lay.appendChild(f);
+    });
+    g0.appendChild(lay);
+    g0.appendChild(field('Opacity (0-1)', 'opacity', 'number', '', e));
+    g0.appendChild(field('Rotate (deg)', 'rotate', 'number', '', e));
+    g0.appendChild(field('Layer order (z)', 'z', 'number', '', e));
+    g0.appendChild(field('3D tilt Y (deg)', 'tiltY', 'number', '', e));
+    g0.appendChild(field('3D tilt X (deg)', 'tiltX', 'number', '', e));
+    var si = field('Show only when', 'showIf', 'text', 'e.g. bases.1  |  !isFinal  |  outs>0', e);
+    g0.appendChild(si);
+    var tools = document.createElement('div');
+    tools.className = 'row';
+    tools.style.gridColumn = '1 / -1';
+    tools.innerHTML = '<button data-t="dup">Duplicate</button><button data-t="cx">Center H</button><button data-t="cy">Center V</button><button data-t="del" style="margin-left:auto;color:#e5534b">Delete</button>';
+    tools.onclick = function (ev) {
+      var t = ev.target.dataset.t;
+      if (!t) return;
+      snapshot(true);
+      if (t === 'dup') { var c = clone(e); c.id = uid(e.type); c.name = (e.name || '') + ' copy'; c.x += 16; c.y += 16; def().elements.push(c); SEL = c.id; }
+      if (t === 'cx') e.x = Math.round(960 - e.w / 2);
+      if (t === 'cy') e.y = Math.round(540 - e.h / 2);
+      if (t === 'del') { def().elements = def().elements.filter(function (x) { return x.id !== e.id; }); SEL = null; }
+      renderAll();
+    };
+    g0.appendChild(tools);
+    box.appendChild(s0);
+
+    var s1 = section('Look & data');
+    var g1 = s1.querySelector('.grid2');
+    (SCHEMA[e.type] || []).forEach(function (f) { g1.appendChild(field(f[0], f[1], f[2], f[3], e)); });
+    box.appendChild(s1);
+
+    var s2 = section('Animate in');
+    var g2 = s2.querySelector('.grid2');
+    g2.appendChild(field('Type', 'anim.in.type', GFX.ANIM_TYPES, '', e));
+    g2.appendChild(field('Easing', 'anim.in.ease', Object.keys(GFX.EASE), '', e));
+    g2.appendChild(field('Duration (ms)', 'anim.in.dur', 'number', '', e));
+    g2.appendChild(field('Delay (ms)', 'anim.in.delay', 'number', '', e));
+    g2.appendChild(field('Distance (px)', 'anim.in.dist', 'number', '60', e));
+    g2.appendChild(field('Letter stagger (ms)', 'anim.in.stagger', 'number', '35', e));
+    g2.appendChild(field('Origin', 'anim.in.origin', ['', 'left center', 'right center', 'center top', 'center bottom', 'center center'], '', e));
+    box.appendChild(s2);
+
+    var s3 = section('Animate out');
+    var g3 = s3.querySelector('.grid2');
+    g3.appendChild(field('Type (auto = reverse of in)', 'anim.out.type', ['auto'].concat(GFX.ANIM_TYPES), '', e));
+    g3.appendChild(field('Easing', 'anim.out.ease', Object.keys(GFX.EASE), '', e));
+    g3.appendChild(field('Duration (ms)', 'anim.out.dur', 'number', '', e));
+    g3.appendChild(field('Delay (ms)', 'anim.out.delay', 'number', '', e));
+    box.appendChild(s3);
+
+    if (e.type === 'table' || e.type === 'field' || e.type === 'linescore') {
+      var s4 = section('Row / label stagger');
+      var g4 = s4.querySelector('.grid2');
+      g4.appendChild(field('Type', 'anim.rows.type', [''].concat(GFX.ANIM_TYPES), '', e));
+      g4.appendChild(field('Stagger (ms)', 'anim.rows.stagger', 'number', '60', e));
+      g4.appendChild(field('Duration (ms)', 'anim.rows.dur', 'number', '300', e));
+      g4.appendChild(field('Start delay (ms)', 'anim.rows.delay', 'number', '0', e));
+      g4.appendChild(field('Distance (px)', 'anim.rows.dist', 'number', '40', e));
+      box.appendChild(s4);
+    }
+
+    var s6 = section('Hold and loop');
+    var g6 = s6.querySelector('.grid2');
+    g6.appendChild(field('Leave on its own after (ms, 0 = stays)', 'anim.hold', 'number', '0', e));
+    g6.appendChild(field('Loop while on air', 'anim.loop.type', GFX.LOOP_TYPES, '', e));
+    g6.appendChild(field('Loop length (ms)', 'anim.loop.dur', 'number', '4000', e));
+    g6.appendChild(field('Loop amount', 'anim.loop.amount', 'number', '', e));
+    var h6 = document.createElement('div');
+    h6.className = 'hint'; h6.style.gridColumn = '1 / -1';
+    h6.textContent = 'Hold lets one layer exit while the graphic stays up, for sequences like big kinetic type that clears for a card. Loops run after the layer lands.';
+    g6.appendChild(h6);
+    box.appendChild(s6);
+
+    var s5 = section('When data changes');
+    var g5 = s5.querySelector('.grid2');
+    g5.appendChild(field('Effect', 'anim.change', ['none', 'pop', 'flash', 'roll'], '', e));
+    box.appendChild(s5);
+  }
+
+  // ------------------------------------------------------------ timeline
+  function renderTimeline() {
+    var els = def().elements || [];
+    var tl = GFX.timeline(def());
+    $('tlTotal').textContent = 'In ' + Math.round(tl['in']) + ' ms  |  Out ' + Math.round(tl.out) + ' ms';
+    var maxMs = Math.max(2000, (tlMode === 'in' ? tl['in'] : tl.out) + 400);
+    var trackW = Math.max(700, maxMs * TL_SCALE);
+    var ruler = $('tlRuler');
+    ruler.innerHTML = '<div class="tlname"></div><div class="tltrack" style="min-width:' + trackW + 'px"></div>';
+    var rt = ruler.querySelector('.tltrack');
+    for (var t = 0; t <= maxMs; t += 100) {
+      var k = document.createElement('div');
+      k.className = 'tick';
+      k.style.left = (t * TL_SCALE) + 'px';
+      if (t % 500 === 0) k.textContent = (t / 1000).toFixed(1) + 's'; else k.style.borderLeftColor = '#222b37';
+      rt.appendChild(k);
+    }
+    var rows = $('tlRows');
+    rows.innerHTML = '';
+    for (var i = els.length - 1; i >= 0; i--) {
+      (function (e) {
+        var sp = GFX.specs(e);
+        var a = tlMode === 'in' ? sp['in'] : sp.out;
+        if (tlMode === 'out' && (!a.dur)) a.dur = sp['in'].dur;
+        var r = document.createElement('div');
+        r.className = 'tlrow' + (e.id === SEL ? ' sel' : '');
+        r.innerHTML = '<div class="tlname"></div><div class="tltrack" style="min-width:' + trackW + 'px"></div>';
+        r.querySelector('.tlname').textContent = e.name || e.id;
+        r.querySelector('.tlname').onclick = function () { SEL = e.id; renderLayers(); renderInspector(); renderTimeline(); drawSelection(); };
+        var tr = r.querySelector('.tltrack');
+        var bar = document.createElement('div');
+        bar.className = 'bar' + (tlMode === 'out' ? ' out' : '');
+        bar.style.left = ((a.delay || 0) * TL_SCALE) + 'px';
+        bar.style.width = ((a.dur || 0) * TL_SCALE) + 'px';
+        bar.title = (a.type === 'auto' ? 'reverse ' + sp['in'].type : a.type) + '  delay ' + (a.delay || 0) + 'ms  dur ' + a.dur + 'ms';
+        bar.innerHTML = '<div class="rh"></div>';
+        tr.appendChild(bar);
+        if (tlMode === 'in' && sp.hold) {
+          var hb = document.createElement('div');
+          hb.className = 'bar out';
+          var hs = (a.delay || 0) + (a.dur || 0) + sp.hold;
+          hb.style.left = (hs * TL_SCALE) + 'px';
+          hb.style.width = ((sp.out.dur || 300) * TL_SCALE) + 'px';
+          hb.style.opacity = 0.6;
+          hb.title = 'Leaves on its own (hold ' + sp.hold + ' ms)';
+          tr.appendChild(hb);
+        }
+        if (tlMode === 'in' && sp.rows && sp.rows.type) {
+          var rb = document.createElement('div');
+          rb.className = 'bar rows';
+          var rs = (a.delay || 0) + (sp.rows.delay || 0);
+          var cnt = 9;
+          rb.style.left = (rs * TL_SCALE) + 'px';
+          rb.style.width = (((sp.rows.stagger || 60) * (cnt - 1) + (sp.rows.dur || 300)) * TL_SCALE) + 'px';
+          rb.title = 'Row stagger';
+          tr.appendChild(rb);
+        }
+        bar.onmousedown = function (ev) {
+          ev.preventDefault();
+          SEL = e.id;
+          snapshot(true);
+          var key = tlMode === 'in' ? 'in' : 'out';
+          e.anim = e.anim || {};
+          e.anim[key] = Object.assign({}, tlMode === 'in' ? sp['in'] : sp.out, e.anim[key] || {});
+          var target = e.anim[key];
+          var mode = ev.target.classList.contains('rh') ? 'dur' : 'delay';
+          var x0 = ev.clientX, d0 = target.delay || 0, u0 = target.dur || 0;
+          function mm(m) {
+            var dms = (m.clientX - x0) / TL_SCALE;
+            var step = m.shiftKey ? 50 : 10;
+            if (mode === 'delay') target.delay = Math.max(0, Math.round((d0 + dms) / step) * step);
+            else target.dur = Math.max(20, Math.round((u0 + dms) / step) * step);
+            bar.style.left = (target.delay * TL_SCALE) + 'px';
+            bar.style.width = (target.dur * TL_SCALE) + 'px';
+            setDirty();
+          }
+          function mu() { removeEventListener('mousemove', mm); removeEventListener('mouseup', mu); renderAll(); }
+          addEventListener('mousemove', mm);
+          addEventListener('mouseup', mu);
+        };
+        rows.appendChild(r);
+      })(els[i]);
+    }
+  }
+
+  function runPlayhead(ms) {
+    var ph = $('playhead');
+    var speed = Number($('speed').value) || 1;
+    var t0 = performance.now();
+    ph.style.display = 'block';
+    cancelAnimationFrame(runPlayhead._raf);
+    (function step() {
+      var t = (performance.now() - t0) * speed;
+      ph.style.left = (NAME_W + t * TL_SCALE) + 'px';
+      if (t < ms + 200) runPlayhead._raf = requestAnimationFrame(step); else ph.style.display = 'none';
+    })();
+  }
+
+  function playIn() {
+    stopLoop();
+    var speed = Number($('speed').value) || 1;
+    tlMode = 'in'; setTlButtons(); renderTimeline();
+    GR.hide(true);
+    void $('stage').offsetWidth;
+    GR.show(false, speed);
+    runPlayhead(GFX.timeline(def())['in']);
+  }
+  function playOut() {
+    stopLoop();
+    var speed = Number($('speed').value) || 1;
+    tlMode = 'out'; setTlButtons(); renderTimeline();
+    GR.show(true);
+    runPlayhead(GFX.timeline(def()).out);
+    return GR.hide(false, speed).then(function () { setTimeout(function () { if (!playing) GR.show(true); }, 700); });
+  }
+  function loop() {
+    if (playing) { stopLoop(); return; }
+    $('bLoop').classList.add('on');
+    var speed = Number($('speed').value) || 1;
+    playing = true;
+    (function cycle() {
+      if (!playing) return;
+      var tl = GFX.timeline(def());
+      GR.hide(true);
+      GR.show(false, speed);
+      runPlayhead(tl['in']);
+      playing = setTimeout(function () {
+        GR.hide(false, speed).then(function () { if (playing) playing = setTimeout(cycle, 700); });
+      }, tl['in'] / speed + 1600);
+    })();
+  }
+  function stopLoop() { if (playing) { clearTimeout(playing); playing = null; $('bLoop').classList.remove('on'); GR && GR.show(true); } }
+  function setTlButtons() { $('tlIn').classList.toggle('on', tlMode === 'in'); $('tlOut').classList.toggle('on', tlMode === 'out'); }
+
+  // --------------------------------------------------------------- theme
+  function renderTheme() {
+    var b = $('themeBox');
+    b.innerHTML = '';
+    var g = document.createElement('div');
+    g.className = 'grid2';
+    var LABELS = { primary: 'Primary', accent: 'Accent', text: 'Text', dim: 'Dim text', line: 'Divider lines', card: 'Card', panel: 'Panel', panel2: 'Panel alt' };
+    Object.keys(theme()).filter(function (k) { return ['font', 'font2', 'logo', 'openerVideo'].indexOf(k) < 0; })
+      .map(function (k) { return [k, LABELS[k] || k]; }).forEach(function (t) {
+      var f = document.createElement('div');
+      f.className = 'f full';
+      f.innerHTML = '<label>' + t[1] + ' ($' + t[0] + ')</label><div class="cw"><input type="color"><input type="text"></div>';
+      var sw = f.querySelector('input[type=color]'), tx = f.querySelector('input[type=text]');
+      tx.value = theme()[t[0]] || '';
+      sw.value = /^#[0-9a-f]{6}$/i.test(tx.value) ? tx.value : '#000000';
+      function set(v) { snapshot(); DOC.theme = DOC.theme || {}; DOC.theme[t[0]] = v; renderStage(); }
+      sw.oninput = function () { tx.value = sw.value.toUpperCase(); set(tx.value); };
+      tx.oninput = function () { set(tx.value); if (/^#[0-9a-f]{6}$/i.test(tx.value)) sw.value = tx.value; };
+      g.appendChild(f);
+    });
+    [['font', 'Font stack ($font)'], ['font2', 'Condensed font stack ($font2)'], ['brandName', 'Brand name ({brand.name}, blank = home team)'], ['logo', 'Brand logo URL ({brand.logo}, blank = home logo)'],
+     ['openerVideo', 'Opener video URL ({theme.openerVideo})']].forEach(function (t) {
+      var ff = document.createElement('div');
+      ff.className = 'f full';
+      ff.innerHTML = '<label>' + t[1] + '</label><input type="text">';
+      var fi = ff.querySelector('input');
+      fi.value = theme()[t[0]] || '';
+      fi.oninput = function () { snapshot(); DOC.theme[t[0]] = fi.value; renderStage(); };
+      if (t[0] === 'font' || t[0] === 'font2') fi.setAttribute('list', 'fontList');
+      g.appendChild(ff);
+    });
+    var fx = document.createElement('div');
+    fx.className = 'f full';
+    fx.innerHTML = '<label>Fonts</label><div class="row" style="flex-wrap:wrap"><button id="bFontUp">Upload font...</button>' +
+      '<button id="bFontLocal" title="Lets the editor list fonts installed on this computer">Load installed fonts</button></div>' +
+      '<input type="file" id="fFont" accept=".ttf,.otf,.woff,.woff2" hidden><div class="hint" id="fontNote"></div>';
+    g.appendChild(fx);
+    fx.querySelector('#bFontUp').onclick = function () { $('fFont').click(); };
+    fx.querySelector('#fFont').onchange = uploadFont;
+    fx.querySelector('#bFontLocal').onclick = loadLocalFonts;
+    fontNote();
+    b.appendChild(g);
+  }
+
+  // --------------------------------------------------------------- fonts
+  var FONTS = [], LOCAL_FONTS = [];
+  function fontNote() {
+    var n = $('fontNote');
+    if (!n) return;
+    n.innerHTML = (FONTS.length ? 'Uploaded: <b>' + FONTS.map(function (f) { return GFX.esc(f.family); }).join(', ') + '</b>. ' : '') +
+      'Type any font installed in Windows by name; OBS on this computer can use it. Uploaded fonts (media/fonts) also work on other machines.' +
+      (LOCAL_FONTS.length ? ' ' + LOCAL_FONTS.length + ' installed fonts listed.' : '');
+  }
+  function fillFontList() {
+    var dl = $('fontList');
+    if (!dl) return;
+    var names = ['$font', '$font2'].concat(FONTS.map(function (f) { return f.family; })).concat(LOCAL_FONTS);
+    dl.innerHTML = Array.from(new Set(names)).map(function (n) { return '<option value="' + GFX.esc(n) + '">'; }).join('');
+    fontNote();
+  }
+  function setFonts(list) {
+    FONTS = list || [];
+    GFX.loadFonts(FONTS, function () { if (GR) GR.update(ctx()); });
+    fillFontList();
+  }
+  function uploadFont() {
+    var f = $('fFont').files[0];
+    if (!f) return;
+    var rd = new FileReader();
+    rd.onload = function () {
+      GFX.api('/api/fonts/upload', { filename: f.name, data: rd.result }).then(function (r) {
+        if (!r.ok) return toast(r.error || 'Upload failed');
+        setFonts(r.fonts);
+        toast('Font "' + r.family + '" added. Pick it in any Font field.');
+      });
+    };
+    rd.readAsDataURL(f);
+    $('fFont').value = '';
+  }
+  function loadLocalFonts() {
+    if (!window.queryLocalFonts) { toast('This browser cannot list installed fonts. Type the font name instead.'); return; }
+    window.queryLocalFonts().then(function (list) {
+      LOCAL_FONTS = Array.from(new Set(list.map(function (f) { return f.family; }))).sort();
+      fillFontList();
+      toast(LOCAL_FONTS.length + ' installed fonts added to the Font menus');
+    }).catch(function () { toast('Font access was not allowed. You can still type a font name.'); });
+  }
+
+  // ----------------------------------------------------------- top-level
+  function renderAll() {
+    renderGraphicSelect();
+    renderGraphicSettings();
+    renderLayers();
+    renderStage();
+    renderInspector();
+    renderTimeline();
+    renderTheme();
+  }
+
+  function selectGraphic(gid) {
+    stopLoop();
+    GID = gid;
+    SEL = null;
+    hiddenIds = {};
+    lockedIds = {};
+    var d = def();
+    if (d.side === 'away' || d.side === 'home') $('sideSel').value = d.side;
+    renderAll();
+  }
+
+  function save() {
+    return GFX.api('/api/templates', DOC).then(function (r) {
+      if (r && r.ok) {
+        DIRTY = false;
+        $('saveState').textContent = 'Saved ' + new Date().toLocaleTimeString();
+        $('saveState').className = '';
+        toast('Saved. Every OBS overlay updated.');
+      } else toast('Save failed: ' + (r && r.error));
+    }).catch(function (e) { toast('Save failed: ' + e); });
+  }
+
+  function wire() {
+    $('gSel').onchange = function () { selectGraphic($('gSel').value); };
+    $('bNewG').onclick = function () {
+      var name = prompt('Name for the new graphic', 'New Graphic');
+      if (!name) return;
+      var id = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'graphic';
+      while (DOC.graphics[id]) id += '_2';
+      snapshot(true);
+      DOC.graphics[id] = { name: name, group: '', autoHide: 0, side: '', sided: false, elements: [] };
+      selectGraphic(id);
+      toast('Created "' + name + '". Reload the script in OBS to get its hotkey.');
+    };
+    $('bDupG').onclick = function () {
+      var id = GID + '_copy';
+      while (DOC.graphics[id]) id += '_2';
+      snapshot(true);
+      DOC.graphics[id] = clone(def());
+      DOC.graphics[id].name = (def().name || GID) + ' Copy';
+      selectGraphic(id);
+    };
+    $('bDelG').onclick = function () {
+      if (Object.keys(DOC.graphics).length < 2) return toast('Keep at least one graphic.');
+      if (!confirm('Delete graphic "' + (def().name || GID) + '"?')) return;
+      snapshot(true);
+      delete DOC.graphics[GID];
+      selectGraphic(Object.keys(DOC.graphics)[0]);
+    };
+    $('gName').oninput = function () { snapshot(); def().name = $('gName').value; renderGraphicSelect(); };
+    $('gGroup').oninput = function () { snapshot(); def().group = $('gGroup').value.trim(); };
+    $('gAuto').oninput = function () { snapshot(); def().autoHide = Number($('gAuto').value) || 0; };
+    $('gSided').onchange = function () { snapshot(); def().sided = $('gSided').checked; };
+    $('gSide').onchange = function () { snapshot(); def().side = $('gSide').value; };
+    // A rule is one slot or a comma list tried in order; {tokens} come from the game (halfKey, batter.slot).
+    $('gSponsor').oninput = function () { snapshot(); var v = $('gSponsor').value.replace(/[^a-zA-Z0-9_{}.,\s-]/g, '').trim(); if (v) def().sponsorSlot = v; else delete def().sponsorSlot; renderStage(); };
+    $('gRowSponsor').oninput = function () { snapshot(); var v = $('gRowSponsor').value.replace(/[^a-zA-Z0-9_{}.,\s-]/g, '').trim(); if (v) def().rowSponsors = v; else delete def().rowSponsors; renderStage(); };
+    $('gGroupPicker').onchange = function () { snapshot(); def().groupPicker = $('gGroupPicker').checked || undefined; };
+    $('prevSponsor').onchange = renderStage;
+
+    $('addEl').onchange = function () { var t = $('addEl').value; $('addEl').value = ''; if (t) addElement(t); };
+    $('bPlayIn').onclick = playIn;
+    $('bPlayOut').onclick = playOut;
+    $('bLoop').onclick = loop;
+    $('tlIn').onclick = function () { tlMode = 'in'; setTlButtons(); renderTimeline(); };
+    $('tlOut').onclick = function () { tlMode = 'out'; setTlButtons(); renderTimeline(); };
+    $('dataSel').onchange = renderStage;
+    $('sideSel').onchange = renderStage;
+    $('bUndo').onclick = undo;
+    $('bRedo').onclick = redo;
+    $('bSave').onclick = save;
+    $('bExport').onclick = function () {
+      var blob = new Blob([JSON.stringify(DOC, null, 1)], { type: 'application/json' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'baseball-graphics-templates.json';
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+    };
+    $('bImport').onclick = function () { $('fImport').click(); };
+    $('fImport').onchange = function () {
+      var f = $('fImport').files[0];
+      if (!f) return;
+      f.text().then(function (t) {
+        var d = JSON.parse(t);
+        if (!d.graphics) throw new Error('No graphics in file');
+        snapshot(true);
+        DOC = d;
+        selectGraphic(Object.keys(DOC.graphics)[0]);
+        toast('Imported. Click Save to push to OBS.');
+      }).catch(function (e) { toast('Import failed: ' + e.message); });
+      $('fImport').value = '';
+    };
+    GFX.api('/api/packages').then(function (r) {
+      (r.packages || []).forEach(function (p) {
+        var o = document.createElement('option');
+        o.value = p.id;
+        o.textContent = p.name + ' (' + p.graphics + ')';
+        o.title = p.description || '';
+        $('pkgSel').appendChild(o);
+      });
+    });
+    $('pkgSel').onchange = function () {
+      var id = $('pkgSel').value;
+      $('pkgSel').value = '';
+      if (!id) return;
+      if (!confirm('Replace the current graphics with this package? Undo works until you save.')) return;
+      GFX.api('/api/packages/' + id).then(function (d) {
+        snapshot(true);
+        DOC = d;
+        selectGraphic(Object.keys(DOC.graphics)[0]);
+        toast('Package loaded. Click Save to OBS to put it on air.');
+      });
+    };
+    $('bReset').onclick = function () {
+      if (!confirm('Replace all graphics with the default package? (You can Undo before saving.)')) return;
+      snapshot(true);
+      DOC = clone(DEFAULT_DOC);
+      selectGraphic(Object.keys(DOC.graphics)[0]);
+    };
+
+    $('bRef').onclick = function () { $('fRef').click(); };
+    $('fRef').onchange = function () {
+      var f = $('fRef').files[0];
+      if (!f) return;
+      var img = $('refImg');
+      img.src = URL.createObjectURL(f);
+      img.style.display = 'block';
+      $('refOn').checked = true;
+      toast('Reference loaded. Trace over it, then hide it before judging colors.');
+    };
+    $('refOn').onchange = function () { $('refImg').style.display = $('refOn').checked && $('refImg').src ? 'block' : 'none'; };
+    $('refOp').oninput = function () { $('refImg').style.opacity = $('refOp').value; };
+    $('refImg').style.opacity = $('refOp').value;
+    $('refPos').onchange = function () { $('refImg').style.zIndex = $('refPos').value === 'over' ? 5 : 0; $('stage').style.zIndex = 1; };
+    $('showGrid').onchange = function () { var g = $('gridOv'); var s = (parseInt($('snapSize').value, 10) || 8) * 4; g.style.backgroundSize = s + 'px ' + s + 'px'; g.style.display = $('showGrid').checked ? 'block' : 'none'; };
+    $('showSafe').onchange = function () { $('safe').style.display = $('showSafe').checked ? 'block' : 'none'; };
+
+    addEventListener('resize', fitStage);
+    addEventListener('beforeunload', function (e) { if (DIRTY) { e.preventDefault(); e.returnValue = ''; } });
+    addEventListener('keydown', function (ev) {
+      var tag = (document.activeElement && document.activeElement.tagName) || '';
+      var typing = /INPUT|TEXTAREA|SELECT/.test(tag);
+      var mod = ev.ctrlKey || ev.metaKey;
+      if (mod && ev.key.toLowerCase() === 's') { ev.preventDefault(); save(); return; }
+      if (typing) return;
+      if (mod && ev.key.toLowerCase() === 'z') { ev.preventDefault(); ev.shiftKey ? redo() : undo(); return; }
+      if (mod && ev.key.toLowerCase() === 'y') { ev.preventDefault(); redo(); return; }
+      var e = SEL && elById(SEL);
+      if (!e) return;
+      if (mod && ev.key.toLowerCase() === 'd') {
+        ev.preventDefault(); snapshot(true);
+        var c = clone(e); c.id = uid(e.type); c.name = (e.name || '') + ' copy'; c.x += 16; c.y += 16;
+        def().elements.push(c); SEL = c.id; renderAll(); return;
+      }
+      if (ev.key === 'Delete' || ev.key === 'Backspace') {
+        snapshot(true); def().elements = def().elements.filter(function (x) { return x.id !== e.id; }); SEL = null; renderAll(); return;
+      }
+      var step = ev.shiftKey ? 10 : 1;
+      var mv = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[ev.key];
+      if (mv) { ev.preventDefault(); snapshot(); e.x += mv[0]; e.y += mv[1]; moveLive(e); }
+      if (ev.key === 'Escape') { SEL = null; renderAll(); }
+    });
+  }
+
+  function datalists() {
+    var sdl = document.createElement('datalist');
+    sdl.id = 'sponsorSlots';
+    document.body.appendChild(sdl);
+    var fdl = document.createElement('datalist');
+    fdl.id = 'fontList';
+    document.body.appendChild(fdl);
+    var dl = document.createElement('datalist');
+    dl.id = 'colorTokens';
+    COLOR_TOKENS.forEach(function (t) { var o = document.createElement('option'); o.value = t; dl.appendChild(o); });
+    document.body.appendChild(dl);
+    var rf = document.createElement('datalist');
+    rf.id = 'rowFields';
+    GFX.BINDINGS.forEach(function (g) { g[1].forEach(function (b) { if (b[0].indexOf('row.') === 0) { var o = document.createElement('option'); o.value = '{' + b[0] + '}'; rf.appendChild(o); } }); });
+    ['slot', 'name', 'pos', 'avg', 'ip', 'h', 'r', 'er', 'bb', 'k', 'pc', 'today'].forEach(function (k) { var o = document.createElement('option'); o.value = k; rf.appendChild(o); });
+    document.body.appendChild(rf);
+  }
+
+  Promise.all([GFX.api('/api/templates'), GFX.api('/api/templates/default'), GFX.api('/api/sample'), GFX.api('/api/state?view=control')]).then(function (r) {
+    DOC = r[0]; DEFAULT_DOC = r[1]; SAMPLE = r[2]; LIVE = r[3].game; UI = r[3].ui || UI;
+    if (!DOC.theme) DOC.theme = clone(DEFAULT_DOC.theme || {});
+    datalists();
+    setFonts(r[3].fonts);
+    wire();
+    initStageEvents();
+    var q = new URLSearchParams(location.search).get('g');
+    selectGraphic(q && DOC.graphics[q] ? q : Object.keys(DOC.graphics)[0]);
+    fitStage();
+    $('saveState').textContent = 'Saved';
+    GFX.connect(function (msg) {
+      if (msg.type === 'game') { LIVE = msg.data; if ($('dataSel').value === 'live' && GR) GR.update(ctx()); }
+      if (msg.type === 'ui') UI = msg.data;
+      if (msg.type === 'fonts') setFonts(msg.data);
+    }, null, 'view=control');
+  }).catch(function (e) {
+    document.body.innerHTML = '<div class="empty">Could not reach the graphics server. Is the OBS script loaded? (' + e + ')</div>';
+  });
+})();
+</script>
+</body>
+</html>

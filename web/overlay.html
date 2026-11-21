@@ -1,0 +1,239 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Baseball Graphics Overlay</title>
+<link rel="stylesheet" href="engine.css">
+<script src="vendor/qrcode.js"></script>
+<script src="engine.js"></script>
+</head>
+<body class="gx-overlay">
+<div id="stage" class="gx-stage"></div>
+<script>
+/*
+ * OBS Browser Source page. Usage:
+ *   overlay.html?g=scorebug          one graphic per source (recommended)
+ *   overlay.html?g=scorebug,linescore several graphics in one source
+ *   overlay.html?g=all               every graphic in one source
+ * Add &preview=1 to show the graphic(s) on load regardless of on-air state
+ * Add &out=fill or &out=key for separate fill and key feeds to a hardware switcher
+ * (handy for checking layout in a normal browser).
+ */
+(function () {
+  var params = new URLSearchParams(location.search);
+  var want = (params.get('g') || 'all').split(',').map(function (s) { return s.trim(); });
+  var preview = params.get('preview') === '1';
+  var sample = params.get('sample') === '1';   // use placeholder data instead of the live game
+  var sampleGame = null;
+  if (sample) GFX.api('/api/sample').then(function (g) { sampleGame = g; S.game = g; refresh(); });
+  var stage = document.getElementById('stage');
+  // Key + fill for a hardware switcher: &out=fill draws the graphics over black, &out=key draws their shape as white
+  // (see-through parts grey) over black. Put each in its own OBS scene and send them to two outputs (NDI, SDI, projector).
+  var out = params.get('out');
+  if (out === 'fill' || out === 'key') {
+    document.documentElement.style.background = '#000';
+    document.body.style.background = '#000';
+    if (out === 'key') stage.style.filter = 'brightness(0) invert(1)';
+  }
+  var S = { game: null, ui: null, templates: null };
+  var mounted = {};
+  var lastSetSig = '';
+
+  function fit() {
+    var k = Math.min(innerWidth / 1920, innerHeight / 1080);
+    stage.style.transform = 'scale(' + k + ')';
+  }
+  addEventListener('resize', fit);
+  fit();
+
+  function theme() { return (S.templates && S.templates.theme) || {}; }
+  // ?layer=lower: every graphic whose group belongs to that layer (one OBS source per layer)
+  var LAYERS = { full: ['full'], panel: ['panel'], lower: ['lower', 'note'], ticker: ['ticker'], bug: ['bug', 'bug2'], event: ['event', 'event2'], stinger: ['stinger'] };
+  var layer = params.get('layer');
+  function layerOf(group) { for (var k in LAYERS) if (LAYERS[k].indexOf(group || '') >= 0) return k; return 'lower'; }
+  function wanted(gid, def) {
+    if (layer) return layerOf(def && def.group) === layer;
+    return want.indexOf('all') >= 0 || want.indexOf(gid) >= 0;
+  }
+  function isOn(gid) { return preview || !!(S.ui && S.ui.visible && S.ui.visible[gid]); }
+  // Library graphics from another package carry that package's theme (fonts, colours) with them.
+  function themeFor(def) { return def && def.theme ? Object.assign({}, theme(), def.theme) : theme(); }
+  function ctxFor(gid, def) { return GFX.makeCtx(S.game, S.ui, gid, def, themeFor(def)); }
+  // Graphics set: when one is active, only its graphics (and anything on air) are built on this page.
+  function setIds() {
+    var a = S.ui && S.ui.activeSet, st = a && S.ui.sets && S.ui.sets[a];
+    return st && st.gids && st.gids.length ? st.gids : null;
+  }
+  function curSport() { return (S.ui && S.ui.sport) || 'baseball'; }
+  // Only the current sport's graphics (and the ones for every sport) are built, unless one is on air.
+  function sportOk(def) { var s = (def && def.sport) || 'baseball'; return s === 'all' || s === curSport(); }
+  function setSig() { var ids = setIds(); return curSport() + '|' + (ids ? ids.join(',') : ''); }
+
+  function rebuild() {
+    Object.keys(mounted).forEach(function (g) { mounted[g].destroy(); });
+    mounted = {};
+    var defs = (S.templates && S.templates.graphics) || {};
+    var ids = setIds(), vis = (S.ui && S.ui.visible) || {};
+    lastSetSig = setSig();
+    Object.keys(defs).forEach(function (gid) {
+      if (!wanted(gid, defs[gid])) return;
+      if (defs[gid].layout) return;
+      if (ids && ids.indexOf(gid) < 0 && !vis[gid] && !preview) return;
+      if (!sportOk(defs[gid]) && !vis[gid] && !preview) return;
+      var gr = mount(gid, defs[gid]);
+      mounted[gid] = gr;
+      if (isOn(gid)) gr.show(true);
+    });
+    applyTickerLift();
+  }
+
+  // Only graphics on air are repainted when data changes. One that is off air is brought up to date the
+  // moment it is taken (applyVisibility), so a page holding dozens of graphics does almost no work per update.
+  function refresh() {
+    Object.keys(mounted).forEach(function (gid) {
+      var gr = mounted[gid];
+      if (gr.state === 'in' || preview) gr.update(ctxFor(gid, gr.def));
+    });
+  }
+  // New templates without a new set: rebuild only graphics that changed, add new ones, drop removed ones,
+  // so graphics on air keep running instead of the whole page starting over.
+  function sync() {
+    var defs = (S.templates && S.templates.graphics) || {}, ids = setIds(), vis = (S.ui && S.ui.visible) || {};
+    Object.keys(mounted).forEach(function (gid) {
+      var d = defs[gid];
+      if (!d || !wanted(gid, d)) { mounted[gid].destroy(); delete mounted[gid]; return; }
+      if (JSON.stringify(d) !== mounted[gid]._sig) {
+        var was = mounted[gid].state === 'in';
+        mounted[gid].destroy();
+        mounted[gid] = mount(gid, d);
+        if (was) mounted[gid].show(true);
+      }
+    });
+    Object.keys(defs).forEach(function (gid) {
+      var d = defs[gid];
+      if (mounted[gid] || d.layout || !wanted(gid, d)) return;
+      if (ids && ids.indexOf(gid) < 0 && !vis[gid] && !preview) return;
+      if (!sportOk(d) && !vis[gid] && !preview) return;
+      mounted[gid] = mount(gid, d);
+    });
+    applyVisibility(); applyTickerLift();
+  }
+  function mount(gid, def) {
+    var gr = new GFX.Graphic(stage, gid, def, themeFor(def));
+    gr.build(ctxFor(gid, def));
+    gr._sig = JSON.stringify(def);
+    return gr;
+  }
+
+  function applyVisibility() {
+    Object.keys(mounted).forEach(function (gid) {
+      var gr = mounted[gid];
+      var on = isOn(gid);
+      if (on && gr.state !== 'in') {
+        gr.update(ctxFor(gid, gr.def));
+        gr.show(false);
+      } else if (!on && gr.state === 'in') {
+        gr.hide(false);
+      }
+    });
+  }
+
+  // Bottom ticker: while a ticker graphic is on air, every other graphic whose artwork reaches into the
+  // ticker's strip slides up just far enough to sit above it (and slides back when the ticker goes off).
+  var TICKER_GAP = 10;
+  function bounds(def) {
+    var r = null;
+    (def.elements || []).forEach(function (e) {
+      var h = Number(e.h) || 0, w = Number(e.w) || 0, x = Number(e.x) || 0, y = Number(e.y) || 0;
+      if (h >= 900 || (w >= 1900 && h >= 500)) return;   // full-screen backdrops never move
+      if (!r) r = { x0: x, y0: y, x1: x + w, y1: y + h };
+      else { r.x0 = Math.min(r.x0, x); r.y0 = Math.min(r.y0, y); r.x1 = Math.max(r.x1, x + w); r.y1 = Math.max(r.y1, y + h); }
+    });
+    return r;
+  }
+  function tickerTop() {
+    var defs = (S.templates && S.templates.graphics) || {}, vis = (S.ui && S.ui.visible) || {}, top = null;
+    Object.keys(defs).forEach(function (gid) {
+      var d = defs[gid];
+      if ((d.group || '') !== 'ticker' || !vis[gid]) return;
+      (d.elements || []).forEach(function (e) {
+        var y = Number(e.y) || 0;
+        if ((Number(e.w) || 0) >= 1000) top = top === null ? y : Math.min(top, y);
+      });
+    });
+    return top;
+  }
+  // Short graphics slide up; tall ones (side panels, title cards) that would run off the top shrink
+  // slightly toward their top edge instead, so nothing is cut off.
+  function applyTickerLift() {
+    var top = tickerTop();
+    Object.keys(mounted).forEach(function (gid) {
+      var gr = mounted[gid], d = gr.def || {};
+      var g = d.group || '';
+      var mode = '';
+      if (top !== null && g !== 'ticker' && g !== 'stinger' && !d.noLift) {
+        var r = bounds(d);
+        if (r && r.y1 > top - TICKER_GAP) {
+          var lift = Math.round(r.y1 - top + TICKER_GAP);
+          if (r.y0 - lift >= 8) mode = 'translateY(' + (-lift) + 'px)';
+          else {
+            var y0 = Math.max(0, r.y0);
+            var k = Math.max(0.6, (top - TICKER_GAP - y0) / Math.max(1, r.y1 - y0));
+            var ox = r.x1 >= 1800 ? r.x1 : (r.x0 <= 120 ? r.x0 : (r.x0 + r.x1) / 2);
+            mode = 'scale(' + k.toFixed(4) + ')|' + ox + 'px ' + y0 + 'px';
+          }
+        }
+      }
+      if (gr._lift !== mode) {
+        gr._lift = mode;
+        var parts = mode.split('|');
+        gr.root.style.transformOrigin = parts[1] || '';
+        gr.root.style.transform = parts[0] || '';
+      }
+    });
+  }
+
+  if (document.fonts) document.fonts.addEventListener('loadingdone', function () { refresh(); });
+
+  // Sponsor rotation: re-evaluate each second; layers only repaint when the sponsor changes.
+  setInterval(function () { if (S.ui && S.ui.sponsors && Object.keys(mounted).length) refresh(); }, 1000);
+
+  GFX.connect(function (msg) {
+    var d = msg.data;
+    switch (msg.type) {
+      case 'full':
+        // After a plugin update (script reloaded in OBS) this page reloads itself, so OBS never runs an old engine.
+        if (d.version && window.__bbgVersion && d.version !== window.__bbgVersion) { location.reload(); return; }
+        window.__bbgVersion = d.version || window.__bbgVersion;
+        if (d.serverNow) GFX.serverOffset = d.serverNow - Date.now();
+        S.game = sampleGame || d.game; S.ui = d.ui; S.templates = d.templates;
+        GFX.loadFonts(d.fonts, refresh);
+        rebuild();
+        break;
+      case 'fonts':
+        GFX.loadFonts(d, refresh);
+        break;
+      case 'game':
+        if (!sample) { S.game = d; refresh(); }
+        break;
+      case 'ui':
+        S.ui = d;
+        // a graphic taken from outside the set, or a new active set, needs the page rebuilt
+        if (setSig() !== lastSetSig) { rebuild(); break; }
+        // taken from outside the active set: build just that graphic, then it animates in like any other
+        Object.keys(d.visible || {}).forEach(function (g) {
+          var defs = (S.templates && S.templates.graphics) || {};
+          if (d.visible[g] && !mounted[g] && defs[g] && !defs[g].layout && wanted(g, defs[g])) mounted[g] = mount(g, defs[g]);
+        });
+        refresh(); applyVisibility(); applyTickerLift();
+        break;
+      case 'templates':
+        S.templates = d;
+        if (setSig() !== lastSetSig) rebuild(); else sync();
+        break;
+    }
+  }, null, 'view=overlay' + (layer ? '&layer=' + encodeURIComponent(layer) : (want.indexOf('all') < 0 ? '&g=' + encodeURIComponent(want.join(',')) : '')));
+})();
+</script>
+</body>
+</html>

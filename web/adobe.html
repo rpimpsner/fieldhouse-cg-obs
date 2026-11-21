@@ -1,0 +1,289 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Adobe Templates - Baseball Graphics</title>
+<link rel="stylesheet" href="engine.css">
+<script src="vendor/qrcode.js"></script>
+<script src="engine.js"></script>
+<script src="ae_export.js"></script>
+<style>
+  :root { --bg: #0f1114; --card: #171a1f; --line: #2a2e35; --text: #e8eaed; --dim: #9aa0a8; --accent: #f5821f; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 'Inter Var', 'Segoe UI', Arial, sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 17px; margin: 0; flex: 1; }
+  main { display: grid; grid-template-columns: 380px 1fr; gap: 16px; padding: 16px 18px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 14px; margin-bottom: 14px; }
+  .card h2 { font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: var(--dim); margin: 0 0 10px; font-weight: 700; }
+  label.row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+  select, input[type=number] { background: #0b0c0e; color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 6px 8px; font: inherit; }
+  select { width: 100%; }
+  button { background: #262a31; color: var(--text); border: 1px solid #353a42; border-radius: 6px; padding: 7px 12px; font: inherit; cursor: pointer; }
+  button:hover { background: #2f343c; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #111; font-weight: 700; width: 100%; padding: 11px; font-size: 15px; }
+  button.primary:disabled { opacity: .5; cursor: wait; }
+  .quick { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .quick button { padding: 4px 9px; font-size: 12px; }
+  #list { max-height: 52vh; overflow: auto; border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
+  #list .grp { color: var(--dim); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; margin: 10px 0 4px; }
+  #list label { display: flex; gap: 8px; align-items: center; padding: 3px 4px; border-radius: 4px; cursor: pointer; }
+  #list label:hover, #list label.cur { background: #22262c; }
+  #list label span { flex: 1; }
+  #preview { position: relative; width: 100%; aspect-ratio: 16 / 9; background: repeating-conic-gradient(#2a2d33 0 25%, #202328 0 50%) 0 0 / 32px 32px;
+             border-radius: 8px; overflow: hidden; border: 1px solid var(--line); }
+  #pstage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
+  #work { position: fixed; left: -4000px; top: 0; width: 1920px; height: 1080px; overflow: hidden; }
+  #status { margin-top: 10px; color: var(--dim); min-height: 20px; white-space: pre-line; }
+  .help { color: var(--dim); font-size: 13px; }
+  .help ol { padding-left: 18px; margin: 6px 0; }
+  .help li { margin: 4px 0; }
+  code { background: #0b0c0e; padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Adobe templates: After Effects and Premiere Pro</h1>
+  <span class="help">Graphics become editable Motion Graphics templates</span>
+</header>
+<main>
+  <div>
+    <div class="card">
+      <h2>1. Style and data</h2>
+      <label class="row">Style <select id="pkg"></select></label>
+      <label class="row">Sample text <select id="data"><option value="sample">Placeholder players</option><option value="live">Current game</option></select></label>
+      <label class="row">Hold on screen <input type="number" id="hold" value="4" min="1" max="60" step="0.5" style="width:80px"> seconds before it animates out</label>
+    </div>
+    <div class="card">
+      <h2>2. Graphics</h2>
+      <div class="quick">
+        <button data-q="core">Scorebug + lower thirds</button><button data-q="post">Recap set</button><button data-q="all">All</button><button data-q="none">None</button>
+      </div>
+      <div id="list"></div>
+    </div>
+    <div class="card">
+      <button class="primary" id="go">Download for After Effects (.zip)</button>
+      <div id="status"></div>
+    </div>
+  </div>
+  <div>
+    <div id="preview"><div id="pstage" class="gx-stage"></div></div>
+    <div class="card help" style="margin-top:14px">
+      <h2>How to use it</h2>
+      <ol>
+        <li>Unzip the download. Keep the <code>images</code> folder next to <code>build_templates.jsx</code>.</li>
+        <li>In After Effects (CC 2019 or later): <b>File &gt; Scripts &gt; Run Script File...</b> and pick <code>build_templates.jsx</code>.</li>
+        <li>It makes one composition per graphic. Names, numbers and stats are text fields in the <b>Essential Graphics</b> panel; team colors, runners on base and outs are controls there too.</li>
+        <li>Say yes when it asks to save Motion Graphics templates, and pick a folder. In Premiere Pro, open <b>Window &gt; Essential Graphics</b>, click the folder icon to add that folder, then drag a template onto the timeline and type in the Edit tab.</li>
+        <li>Stretch a clip in Premiere and only the middle stretches: the in and out animations keep their speed.</li>
+      </ol>
+      <p>Logos and photos come in as pictures. To swap one: in After Effects, right-click the picture in the Project panel and pick <b>Replace Footage</b>.
+        To let editors swap it in Premiere, drag that layer into the Essential Graphics panel before saving the template.</p>
+      <p>Fonts must be installed on the computer running After Effects. If one is missing, the script uses the next one in its list (ending with Arial) and tells you which.</p>
+    </div>
+  </div>
+</main>
+<div id="work" class="gx-stage"></div>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var S = { pkgs: [], doc: null, sample: null, state: null, cur: null, prev: null };
+  var GROUPS = [['bug', 'Scorebugs'], ['bug2', 'Corner bugs'], ['lower', 'Lower thirds'], ['note', 'Notes'], ['full', 'Full screen'], ['panel', 'Side panels'],
+                ['event', 'Event stingers'], ['event2', 'Event panels'], ['ticker', 'Ticker'], ['stinger', 'Transitions']];
+  var CORE = ['scorebug', 'batter', 'pitcher', 'custom', 'talent'];
+  var POST = ['final', 'summary', 'performers', 'dueup', 'standings', 'lineup', 'lineup_results', 'potg', 'scoring_summary', 'box_final', 'matchup_banner',
+              'custom', 'talent', 'batter', 'pitcher'];
+  var checked = {};
+
+  function theme() { return (S.doc && S.doc.theme) || {}; }
+  function game() { return $('data').value === 'live' && S.state && S.state.game && S.state.game.away ? S.state.game : S.sample; }
+  // Placeholder text for fields the show fills in by hand, so every template has something to edit.
+  var FILL = {
+    custom: { line1: 'Custom line one', line2: 'Second line of text' },
+    notes: { kicker: 'Player feature', title: 'Feature title', b1: 'First note about the player', b2: 'Second note', b3: 'Third note',
+             foot: 'Footnote', stat: 'Stat note', statFoot: 'Stat footnote', bugTitle: 'Show title', listFoot: 'List footnote', tab: 'Last season' },
+    show: { name: 'Show name', sub: 'Show subtitle', host1: 'Host Name', role1: 'Play-by-play', host2: 'Analyst Name', role2: 'Analyst',
+            host3: 'Reporter Name', role3: 'Reporter', next1: 'First segment', next2: 'Second segment', next3: 'Third segment' }
+  };
+  function ui() {
+    var u = JSON.parse(JSON.stringify((S.state && S.state.ui) || {}));
+    u.visible = {};
+    Object.keys(FILL).forEach(function (sec) {
+      u[sec] = u[sec] || {};
+      Object.keys(FILL[sec]).forEach(function (k) { if (!u[sec][k]) u[sec][k] = FILL[sec][k]; });
+    });
+    return u;
+  }
+  function ctxFor(gid, def) { return GFX.makeCtx(game(), ui(), gid, def, Object.assign({}, theme(), def.theme || {})); }
+
+  function fitPreview() {
+    var k = $('preview').clientWidth / 1920;
+    $('pstage').style.transform = 'scale(' + k + ')';
+  }
+  addEventListener('resize', fitPreview);
+
+  function preview(gid) {
+    S.cur = gid;
+    Array.prototype.forEach.call(document.querySelectorAll('#list label'), function (l) { l.classList.toggle('cur', l.dataset.g === gid); });
+    if (S.prev) { S.prev.destroy(); S.prev = null; }
+    var def = S.doc.graphics[gid];
+    if (!def) return;
+    var gr = new GFX.Graphic($('pstage'), gid, def, Object.assign({}, theme(), def.theme || {}));
+    gr.build(ctxFor(gid, def));
+    gr.show(false);
+    S.prev = gr;
+  }
+
+  function renderList() {
+    var defs = S.doc.graphics, html = '';
+    GROUPS.forEach(function (g) {
+      var ids = Object.keys(defs).filter(function (k) { return !defs[k].layout && (defs[k].group || 'lower') === g[0]; });
+      if (!ids.length) return;
+      html += '<div class="grp">' + g[1] + '</div>';
+      ids.sort(function (a, b) { return String(defs[a].name).localeCompare(String(defs[b].name)); }).forEach(function (k) {
+        html += '<label data-g="' + k + '"><input type="checkbox" data-g="' + k + '"' + (checked[k] ? ' checked' : '') + '><span>' +
+          GFX.esc(String(defs[k].name || k).replace(/\s*\([^)]*\)\s*$/, '')) + '</span></label>';
+      });
+    });
+    $('list').innerHTML = html;
+    Array.prototype.forEach.call($('list').querySelectorAll('input'), function (cb) {
+      cb.onchange = function () { checked[cb.dataset.g] = cb.checked; };
+    });
+    Array.prototype.forEach.call($('list').querySelectorAll('label'), function (l) {
+      l.onmouseenter = function () { preview(l.dataset.g); };
+    });
+  }
+  function quick(which) {
+    var defs = S.doc.graphics;
+    checked = {};
+    Object.keys(defs).forEach(function (k) {
+      if (defs[k].layout) return;
+      if (which === 'all') checked[k] = true;
+      if (which === 'core' && CORE.indexOf(k) >= 0) checked[k] = true;
+      if (which === 'post' && POST.indexOf(k) >= 0) checked[k] = true;
+    });
+    renderList();
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('.quick button'), function (b) { b.onclick = function () { quick(b.dataset.q); }; });
+
+  function loadPkg(id) {
+    return GFX.api('/api/packages/' + encodeURIComponent(id)).then(function (doc) {
+      S.doc = doc;
+      if (!Object.keys(checked).length) quick('core'); else renderList();
+      preview(Object.keys(checked).filter(function (k) { return checked[k] && doc.graphics[k]; })[0] || 'scorebug');
+    });
+  }
+  $('pkg').onchange = function () { loadPkg($('pkg').value); };
+  $('data').onchange = function () { if (S.cur) preview(S.cur); };
+
+  function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function imagesReady(root) {
+    var imgs = Array.prototype.slice.call(root.querySelectorAll('img'));
+    return Promise.all(imgs.map(function (im) {
+      return im.complete ? null : new Promise(function (r) { im.onload = im.onerror = r; setTimeout(r, 4000); });
+    }));
+  }
+  function bytesOf(blob) { return blob.arrayBuffer().then(function (b) { return new Uint8Array(b); }); }
+  var EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'png', 'image/gif': 'gif', 'image/svg+xml': 'png' };
+  // After Effects imports PNG, JPEG and GIF; WebP and SVG are converted to PNG here.
+  function fetchImage(src) {
+    return fetch(src).then(function (r) { if (!r.ok) throw new Error(r.status); return r.blob(); }).then(function (blob) {
+      var t = (blob.type || '').split(';')[0];
+      if (t === 'image/png' || t === 'image/jpeg' || t === 'image/gif') return bytesOf(blob).then(function (u) { return { data: u, ext: EXT[t] }; });
+      return new Promise(function (res, rej) {
+        var im = new Image();
+        im.onload = function () {
+          var w = im.naturalWidth || 512, h = im.naturalHeight || 512;
+          if (t === 'image/svg+xml' && w < 1000) { var sc = 1000 / Math.max(w, h); w = Math.round(w * sc); h = Math.round(h * sc); }
+          var c = document.createElement('canvas'); c.width = w; c.height = h;
+          c.getContext('2d').drawImage(im, 0, 0, w, h);
+          c.toBlob(function (b) { bytesOf(b).then(function (u) { res({ data: u, ext: 'png' }); }); }, 'image/png');
+        };
+        im.onerror = rej;
+        im.src = URL.createObjectURL(blob);
+      });
+    });
+  }
+
+  $('go').onclick = function () {
+    var ids = Object.keys(checked).filter(function (k) { return checked[k] && S.doc.graphics[k]; });
+    if (!ids.length) { $('status').textContent = 'Tick at least one graphic.'; return; }
+    var btn = $('go'), work = $('work');
+    btn.disabled = true;
+    var style = S.doc.name || $('pkg').value;
+    var data = { title: style + ' templates', fps: 30, graphics: [] }, images = {};
+    var hold = Math.max(0.5, parseFloat($('hold').value) || 4);
+    var chain = (document.fonts ? document.fonts.ready : Promise.resolve());
+    ids.forEach(function (gid, i) {
+      chain = chain.then(function () {
+        $('status').textContent = 'Reading ' + (i + 1) + ' of ' + ids.length + ': ' + (S.doc.graphics[gid].name || gid);
+        var def = S.doc.graphics[gid];
+        var ctx = ctxFor(gid, def);
+        var gr = new GFX.Graphic(work, gid, def, Object.assign({}, theme(), def.theme || {}));
+        gr.build(ctx);
+        gr.show(true);
+        return imagesReady(gr.root).then(function () { return wait(60); }).then(function () {
+          Array.prototype.forEach.call(gr.root.querySelectorAll('.gx-inner'), function (n) { if (n._fit) GFX.fitText(n); });
+          var x = AEX.extract(gr, ctx, work, { hold: hold, images: images });
+          data.graphics.push({ id: gid, name: style + ' - ' + String(def.name || gid).replace(/\s*\([^)]*\)\s*$/, ''), layers: x.layers, controls: x.controls,
+                               inEnd: x.inEnd, outStart: x.outStart, duration: x.duration });
+          gr.destroy();
+        });
+      });
+    });
+    chain.then(function () {
+      $('status').textContent = 'Collecting pictures...';
+      var srcs = Object.keys(images), files = [], missing = 0;
+      return Promise.all(srcs.map(function (src) {
+        return fetchImage(src).then(function (f) {
+          var name = images[src] + '.' + f.ext;
+          files.push({ name: 'images/' + name, data: f.data });
+          images[src] = name;
+        }).catch(function () { missing++; images[src] = null; });
+      })).then(function () {
+        data.graphics.forEach(function (g) {
+          g.layers.forEach(function (L) { if (L.t === 'image') L.file = images[L.src] || null; });
+        });
+        return fetch('/ae_runtime.jsx').then(function (r) { if (!r.ok) throw new Error('ae_runtime.jsx ' + r.status); return r.text(); });
+      }).then(function (runtime) {
+        var enc = new TextEncoder();
+        var folder = style.replace(/[\\\/:*?"<>|]/g, '-') + ' - After Effects/';
+        var readme = 'OBS Baseball Graphics: ' + style + ' templates for After Effects and Premiere Pro\r\n\r\n' +
+          '1. Keep the images folder next to build_templates.jsx.\r\n' +
+          '2. After Effects (CC 2019 or later): File > Scripts > Run Script File... > build_templates.jsx\r\n' +
+          '3. Answer Yes to save Motion Graphics templates (.mogrt) and pick a folder.\r\n' +
+          '4. Premiere Pro: Window > Essential Graphics, add that folder, drag a template onto the timeline, type in the Edit tab.\r\n\r\n' +
+          'Graphics: ' + data.graphics.map(function (g) { return g.name; }).join(', ') + '\r\n';
+        var all = [{ name: folder + 'build_templates.jsx', data: enc.encode(AEX.script(runtime, data)) },
+                   { name: folder + 'README.txt', data: enc.encode(readme) }]
+          .concat(files.map(function (f) { return { name: folder + f.name, data: f.data }; }));
+        var blob = AEX.zip(all);
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = folder.slice(0, -1) + '.zip';
+        document.body.appendChild(a); a.click(); a.remove();
+        var nLayers = data.graphics.reduce(function (n, g) { return n + g.layers.length; }, 0);
+        $('status').textContent = 'Downloaded ' + data.graphics.length + ' graphic(s), ' + nLayers + ' layers, ' + files.length + ' picture(s).' +
+          (missing ? '\n' + missing + ' picture(s) could not be copied (from another website); they come in as gray boxes to replace.' : '');
+        window.__aexLast = { data: data, files: all.map(function (f) { return f.name; }) };
+      });
+    }).catch(function (e) {
+      $('status').textContent = 'Could not build the templates: ' + e;
+      console.error(e);
+    }).then(function () { btn.disabled = false; });
+  };
+
+  Promise.all([GFX.api('/api/packages'), GFX.api('/api/sample'), GFX.api('/api/state?view=control')]).then(function (r) {
+    S.pkgs = r[0].packages || []; S.sample = r[1]; S.state = r[2];
+    GFX.loadFonts(S.state.fonts);
+    var curName = S.state.templates && S.state.templates.name;
+    $('pkg').innerHTML = S.pkgs.map(function (p) {
+      return '<option value="' + GFX.esc(p.id) + '"' + (p.name === curName ? ' selected' : '') + '>' + GFX.esc(p.name) + '</option>';
+    }).join('');
+    fitPreview();
+    return loadPkg($('pkg').value);
+  }).catch(function (e) { $('status').textContent = 'Could not reach the graphics server. Is the OBS script loaded? (' + e + ')'; });
+})();
+</script>
+</body>
+</html>

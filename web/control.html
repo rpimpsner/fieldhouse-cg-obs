@@ -1,0 +1,2602 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Graphics Control</title>
+<script src="engine.js"></script>
+<style>
+  :root { --bg: #0d1117; --panel: #151b24; --panel2: #1c2430; --line: #2a3442; --text: #dde3ea; --dim: #8b97a6; --acc: #f5821f; --live: #e5534b; --ok: #2ecc71; --blue: #3d8bfd; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  button, select, input, textarea { font: inherit; color: var(--text); }
+  button { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+  button:hover { border-color: #3c4a5e; }
+  button:active { transform: translateY(1px); }
+  select, input[type=text], input[type=number], input[type=date], textarea { background: #0f141b; border: 1px solid var(--line); border-radius: 5px; padding: 6px 8px; width: 100%; min-width: 0; }
+  input[type=color] { width: 34px; height: 32px; padding: 0; border: 1px solid var(--line); border-radius: 5px; background: none; flex: 0 0 auto; }
+  .setbar { margin-bottom: 10px; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel2); }
+  .take.inset { outline: 2px solid var(--blue); }
+  .take.outset { opacity: .45; }
+  .takes.editing .take .go { cursor: copy; }
+  textarea { resize: vertical; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+  label { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; display: block; margin-bottom: 3px; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 10px; }
+  .status { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #666; flex: 0 0 auto; }
+  .dot.ok { background: var(--ok); } .dot.bad { background: var(--live); }
+  .status .msg { flex: 1; min-width: 140px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .score { display: flex; gap: 10px; align-items: center; font-weight: 800; font-size: 15px; }
+  .rp { border-color: #6b4bd6; }
+  .rp .h { color: #b9a6ff; }
+  .rp-bar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .rp-bar button { padding: 6px 9px; font-weight: 700; }
+  .rp-now { font-size: 14px; font-weight: 700; margin: 8px 0 2px; color: var(--text); min-height: 18px; }
+  .rp-sub { color: var(--dim); font-size: 12px; margin-bottom: 8px; }
+  #rpSlider { width: 100%; accent-color: #8c6bff; margin: 6px 0; }
+  .chip-rp { background: #6b4bd6; color: #fff; font-size: 10px; font-weight: 800; letter-spacing: 1px; padding: 2px 6px; border-radius: 4px; }
+  .tk-sec { grid-column: 1 / -1; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--dim); margin: 8px 0 -2px; }
+  .take .auto { flex: 1; border: 0; border-radius: 0; background: transparent; padding: 6px; font-size: 11px; font-weight: 700; color: var(--dim); }
+  .take .auto.sel { background: #2e7d4f; color: #fff; }
+  .nav { display: flex; gap: 6px; margin: 0 0 10px; }
+  .nav a { flex: 1; text-align: center; padding: 8px 6px; border: 1px solid var(--line); border-radius: 6px; color: var(--dim); text-decoration: none; font-weight: 700; font-size: 12px; letter-spacing: .5px; }
+  .nav a.sel { background: var(--acc); color: #111; border-color: var(--acc); }
+  .pick-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; max-height: 260px; overflow: auto; margin-top: 8px; }
+  .pick-list button { text-align: left; padding: 7px 9px; }
+  .pick-list button.sel { background: var(--acc); color: #111; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 10px; }
+  .card > summary, .card > .h { padding: 10px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--dim); cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; }
+  .card > summary::-webkit-details-marker { display: none; }
+  .card > summary::before { content: '\25B8'; transition: transform .15s; }
+  .card[open] > summary::before { transform: rotate(90deg); }
+  .body { padding: 0 12px 12px; }
+  .takes { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .take { position: relative; border: 1px solid var(--line); border-radius: 8px; background: var(--panel2); padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+  .take .go { border: 0; border-radius: 0; background: transparent; padding: 14px 10px 12px; font-weight: 800; font-size: 14px; text-align: left; letter-spacing: .3px; }
+  .take .meta { font-size: 10px; color: var(--dim); font-weight: 600; display: block; margin-top: 3px; letter-spacing: .5px; text-transform: uppercase; }
+  .collist { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .colrow { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border: 1px solid var(--line, #2a2e35); border-radius: 6px; }
+  .colrow .sw { width: 26px; height: 26px; border-radius: 4px; border: 1px solid #ffffff33; flex: 0 0 auto; }
+  .colrow input[type=color] { width: 40px; height: 30px; padding: 0; border: 0; background: none; flex: 0 0 auto; cursor: pointer; }
+  .colrow .ci { flex: 1; min-width: 0; font-size: 11px; line-height: 1.25; color: var(--dim, #9aa0a8); overflow: hidden; }
+  .colrow .ci b { color: var(--text, #e8eaed); font-weight: 600; font-family: Consolas, monospace; font-size: 12px; }
+  .colrow.changed { border-color: var(--acc); }
+  .colrow button { padding: 2px 7px; font-size: 11px; }
+  .podtakes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .pad { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; width: 230px; aspect-ratio: 5 / 6; margin: 0 auto; }
+  .pad button { padding: 0; min-height: 0; font-size: 11px; }
+  .pad button.in { background: #24324a; }
+  .pad button.sel { outline: 2px solid var(--live); }
+  .rd { list-style: none; margin: 6px 0; padding: 0; max-height: 260px; overflow: auto; }
+  .rd li { display: flex; gap: 6px; align-items: center; padding: 4px 6px; border-radius: 4px; }
+  .rd li.cur { background: #3a1716; }
+  .rd li span { flex: 1; }
+  .rd li button { padding: 2px 8px; }
+  .podtakes button { flex: 1 1 150px; }
+  .podtakes button.on { border-color: var(--live); box-shadow: 0 0 0 1px var(--live) inset; background: #3a1716; }
+  .mics { display: flex; gap: 6px; }
+  .mics button { flex: 1; }
+  .mics button.on { background: var(--acc); border-color: var(--acc); color: #10141a; font-weight: 800; }
+  .take.on { border-color: var(--live); box-shadow: 0 0 0 1px var(--live) inset; background: #3a1716; }
+  .take.on .go::after { content: 'ON AIR'; position: absolute; right: 8px; top: 8px; font-size: 10px; background: var(--live); color: #fff; padding: 2px 6px; border-radius: 4px; letter-spacing: 1px; }
+  .take .sides { display: flex; border-top: 1px solid var(--line); }
+  .take .sides button { flex: 1; border: 0; border-radius: 0; background: transparent; padding: 6px; font-size: 11px; font-weight: 700; color: var(--dim); }
+  .take .sides button.sel { background: var(--blue); color: #fff; }
+  .alloff { width: 100%; margin-top: 10px; background: var(--live); border-color: var(--live); color: #fff; font-weight: 800; padding: 12px; font-size: 14px; letter-spacing: 1px; }
+  .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .g3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .row > * { min-width: 0; }
+  .full { grid-column: 1 / -1; }
+  .hint { color: var(--dim); font-size: 11px; margin-top: 6px; }
+  .btn-primary { background: var(--acc); border-color: var(--acc); color: #10141a; font-weight: 800; }
+  .stepper { display: flex; align-items: center; gap: 4px; }
+  .stepper b { min-width: 32px; text-align: center; font-size: 18px; }
+  .stepper button { width: 34px; padding: 6px 0; font-weight: 800; }
+  .mgrid { display: grid; grid-template-columns: 70px repeat(3, 1fr); gap: 6px 10px; align-items: center; }
+  .mgrid .lab { color: var(--dim); font-size: 11px; text-transform: uppercase; }
+  .count { display: flex; gap: 8px; flex-wrap: wrap; }
+  .count .grp { display: flex; align-items: center; gap: 4px; }
+  .count .grp span { color: var(--dim); font-size: 11px; width: 52px; }
+  .pip { width: 30px; height: 30px; border-radius: 50%; padding: 0; }
+  .pip.on { background: var(--acc); border-color: var(--acc); }
+  .bases { display: flex; gap: 6px; }
+  .bases button.on { background: var(--acc); border-color: var(--acc); color: #10141a; font-weight: 800; }
+  .urls code { display: block; background: #0f141b; padding: 6px 8px; border-radius: 5px; margin: 4px 0; font-size: 12px; overflow-x: auto; white-space: nowrap; cursor: copy; }
+  #games option { padding: 4px; }
+  #toast { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: #23395a; color: #fff; padding: 8px 14px; border-radius: 6px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+  .ph-tabs { display: flex; gap: 6px; margin-bottom: 8px; }
+  .ph-tabs button.sel { background: var(--blue); border-color: var(--blue); color: #fff; }
+  .ph-list { display: flex; flex-direction: column; gap: 4px; max-height: 520px; overflow-y: auto; }
+  .ph-src.assigned { background: #3b2a1d; color: #ffc48a; }
+  .ph-assign { grid-column: 1 / -1; display: flex; gap: 6px; padding: 6px 0 4px 60px; flex-wrap: wrap; }
+  .ph-assign select, .ph-assign input { flex: 1 1 200px; }
+  .ph-row { display: grid; grid-template-columns: 52px 36px 1fr auto auto auto auto; gap: 8px; align-items: center; padding: 4px 6px; border-radius: 6px; border: 1px dashed transparent; }
+  .ph-row:hover { background: var(--panel2); }
+  .ph-row.drag { border-color: var(--acc); background: #2a2016; }
+  .ph-img { width: 52px; height: 52px; border-radius: 6px; background: #0f141b center/cover no-repeat; display: flex; align-items: center; justify-content: center; color: var(--dim); font-size: 10px; overflow: hidden; }
+  .ph-img img { width: 100%; height: 100%; object-fit: cover; object-position: center top; }
+  .ph-num { color: var(--dim); text-align: right; font-variant-numeric: tabular-nums; }
+  .ph-src { font-size: 10px; padding: 2px 6px; border-radius: 8px; background: var(--panel2); color: var(--dim); text-transform: uppercase; letter-spacing: .5px; }
+  .ph-src.uploaded { background: #1d3b2a; color: #7ee2a5; }
+  .ph-src.feed, .ph-src.pattern { background: #1d2c45; color: #8fb6ff; }
+  .sp-lib { display: flex; flex-direction: column; gap: 6px; }
+  .sp-row { display: grid; grid-template-columns: 74px 1fr 1.4fr auto auto; gap: 6px; align-items: center; }
+  .sp-thumb { width: 74px; height: 36px; background: #fff; border-radius: 4px; display: flex; align-items: center; justify-content: center; overflow: hidden; color: #333; font-size: 10px; font-weight: 700; }
+  .sp-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .sp-slot { border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin-top: 8px; background: var(--panel2); }
+  .sp-slot h4 { margin: 0 0 6px; font-size: 13px; display: flex; gap: 8px; align-items: center; }
+  .sp-slot h4 .now { margin-left: auto; font-size: 11px; color: var(--dim); font-weight: 500; }
+  .sp-slot .uses { font-size: 11px; color: var(--dim); margin-bottom: 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip { display: flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid var(--line); border-radius: 14px; cursor: pointer; font-size: 12px; user-select: none; }
+  .chip.on { background: var(--acc); border-color: var(--acc); color: #10141a; font-weight: 700; }
+  .rep { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 12px; }
+  .rep th, .rep td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--line); }
+  .rep th { color: var(--dim); font-weight: 600; text-transform: uppercase; font-size: 10px; letter-spacing: .5px; }
+  .rep td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  @media (max-width: 520px) { .g2, .g3 { grid-template-columns: 1fr; } .mgrid { grid-template-columns: 56px repeat(3, 1fr); } }
+  body.ed-manual [data-api] { display: none !important; }
+  body.sport-other [data-bb] { display: none !important; }
+  .spclock { display: flex; gap: 12px; }
+  .spclock > div { flex: 1; background: #0d1117; border: 1px solid var(--line, #2a3240); border-radius: 8px; padding: 6px 12px; }
+  .spclock b { font-size: 40px; font-variant-numeric: tabular-nums; }
+  .spclock .lab, .spteam .lab { color: var(--dim); font-size: 11px; text-transform: uppercase; margin-right: 4px; }
+  .spteam { border-top: 1px solid var(--line, #2a3240); margin-top: 10px; padding-top: 10px; }
+  .spscore { font-size: 34px; min-width: 56px; text-align: right; font-variant-numeric: tabular-nums; }
+  .pen { display: inline-block; background: #1d2633; border-radius: 6px; padding: 2px 6px; margin: 2px; }
+  .pen button { padding: 0 6px; }
+  [data-manual] { display: none; } body.ed-manual [data-manual] { display: block; }
+  /* LIVE tab */
+  .lv-air { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .lv-air .none { color: var(--dim); font-size: 12px; }
+  .lv-air button.air { background: #3a1716; border-color: var(--live); font-weight: 700; }
+  .lv-air button.air::after { content: ' \2715'; color: #ff9c96; }
+  .lv-air .alloff { width: auto; margin: 0 0 0 auto; padding: 8px 14px; font-size: 12px; }
+  .lv-board { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; }
+  .lv-team { display: flex; align-items: center; gap: 8px; background: #0f141b; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  .lv-team.home { flex-direction: row-reverse; }
+  .lv-team .ab { font-weight: 800; font-size: 18px; letter-spacing: .5px; flex: 1; }
+  .lv-team.home .ab { text-align: right; }
+  .lv-team .r { font-size: 34px; font-weight: 800; font-variant-numeric: tabular-nums; min-width: 44px; text-align: center; }
+  .lv-team.bat { border-color: var(--acc); }
+  .lv-team .rb { display: flex; flex-direction: column; gap: 3px; }
+  .lv-team .rb button { padding: 2px 8px; font-weight: 800; }
+  .lv-mid { text-align: center; }
+  .lv-inn { font-size: 20px; font-weight: 800; }
+  .lv-mid button { margin-top: 4px; padding: 3px 8px; font-size: 11px; }
+  .lv-state { display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: center; margin-top: 12px; }
+  .lv-diamond { position: relative; width: 96px; height: 96px; }
+  .lv-diamond button { position: absolute; width: 34px; height: 34px; transform: rotate(45deg); padding: 0; border-radius: 4px; }
+  .lv-diamond button span { display: inline-block; transform: rotate(-45deg); font-size: 10px; font-weight: 800; }
+  .lv-diamond button.on { background: var(--acc); border-color: var(--acc); color: #10141a; }
+  .lv-diamond [data-lb="2"] { left: 31px; top: 4px; } .lv-diamond [data-lb="3"] { left: 6px; top: 31px; } .lv-diamond [data-lb="1"] { left: 56px; top: 31px; }
+  .lv-count { display: flex; flex-direction: column; gap: 6px; }
+  .lv-count .ln { display: flex; align-items: center; gap: 6px; }
+  .lv-count .ln > span { width: 54px; color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+  .lv-count i { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line); background: #0f141b; display: inline-block; }
+  .lv-count i.on { background: var(--acc); border-color: var(--acc); }
+  .lv-count .ln.o i.on { background: var(--live); border-color: var(--live); }
+  .lv-who { margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px; }
+  .lv-who div { background: #0f141b; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lv-who b { color: var(--dim); font-size: 10px; letter-spacing: .5px; margin-right: 6px; }
+  .lv-pad { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 12px; }
+  .lv-pad button { padding: 12px 4px; font-weight: 800; font-size: 14px; }
+  .lv-pad button small { display: block; font-size: 9px; font-weight: 600; color: var(--dim); letter-spacing: .5px; margin-top: 2px; }
+  .lv-pad .sep { grid-column: 1 / -1; font-size: 10px; color: var(--dim); letter-spacing: 1.5px; text-transform: uppercase; margin-top: 4px; }
+  .lv-pad .b-ball { border-color: #2e7d4f; } .lv-pad .b-strike, .lv-pad .b-out { border-color: #8a3530; }
+  .lv-hot { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; }
+  .lv-hot .hb { position: relative; text-align: left; padding: 12px 10px 10px; font-weight: 800; min-height: 54px; }
+  .lv-hot .hb .k { position: absolute; right: 6px; top: 5px; font-size: 10px; color: var(--dim); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-weight: 700; }
+  .lv-hot .hb .st { display: block; font-size: 10px; color: var(--dim); font-weight: 600; margin-top: 2px; }
+  .lv-hot .hb.on { border-color: var(--live); background: #3a1716; box-shadow: 0 0 0 1px var(--live) inset; }
+  .lv-hot .hb.missing { opacity: .4; }
+  .lv-hot .ed { display: flex; gap: 3px; margin-top: 4px; }
+  .lv-hot .ed button { padding: 1px 6px; font-size: 11px; }
+  .lv-find { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
+  .lv-find .res { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 4px; max-height: 260px; overflow: auto; margin-top: 6px; }
+  .lv-find .res button { text-align: left; padding: 5px 8px; font-size: 12px; }
+  .lv-find .res button.in { border-color: var(--acc); color: var(--acc); }
+  .tk-search { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .tk-search input[type=text] { flex: 1; }
+  .take.nomatch, .tk-sec.nomatch { display: none; }
+  .lv-board { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
+  .lv-team .ab { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  @media (max-width: 520px) {
+    .nav { flex-wrap: wrap; } .nav a { flex: 1 1 22%; padding: 7px 4px; font-size: 11px; }
+    .lv-board { gap: 6px; } .lv-team { padding: 6px; gap: 5px; } .lv-team .ab { font-size: 14px; } .lv-team .r { font-size: 26px; min-width: 30px; }
+    .lv-team .rb button { padding: 2px 5px; font-size: 11px; }
+    .lv-pad { gap: 4px; } .lv-pad button { padding: 10px 2px; font-size: 12px; }
+    .lv-who { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="status">
+    <span class="dot" id="dot"></span>
+    <span class="score" id="score">-</span>
+    <span class="chip-rp" id="rpChip" hidden>REPLAY</span>
+    <span class="msg" id="msg">Connecting...</span>
+    <button id="bRefresh" title="Fetch data now">Refresh</button>
+    <button id="bEditor" title="Open the visual graphics editor">Editor</button>
+    <button id="bAdobe" title="Make After Effects / Premiere Pro templates from these graphics">Adobe</button>
+  </div>
+
+  <div class="nav" id="nav">
+    <a href="?panel=live" data-p="live">LIVE</a><a href="?panel=scoring" data-p="scoring">SCORING</a><a href="?panel=graphics" data-p="graphics">GRAPHICS</a>
+    <a href="?panel=custom" data-p="custom">CUSTOM</a><a href="?panel=ops" data-p="ops">GAME OPS</a><a href="?panel=podcast" data-p="podcast">PODCAST</a><a href="?" data-p="">ALL</a>
+  </div>
+
+  <div data-panel="live" class="card" id="lvAirCard">
+    <div class="h">On air</div>
+    <div class="body"><div class="lv-air" id="lvAir"></div></div>
+  </div>
+
+  <div data-panel="live" class="card" id="lvGame">
+    <div class="h">Game <span id="lvSrc" style="margin-left:auto;text-transform:none;letter-spacing:0"></span></div>
+    <div class="body">
+      <div class="lv-board">
+        <div class="lv-team away" data-side="away"><span class="ab"></span><b class="r">0</b><span class="rb lv-man"><button data-run="1" title="Add a run (credited to this inning)">+R</button><button data-run="-1" title="Take a run off">-R</button></span></div>
+        <div class="lv-mid"><div class="lv-inn" id="lvInn">-</div><button id="lvHalf" class="lv-man" title="Switch half inning: clears count, outs and bases">Next half</button></div>
+        <div class="lv-team home" data-side="home"><span class="ab"></span><b class="r">0</b><span class="rb lv-man"><button data-run="1" title="Add a run (credited to this inning)">+R</button><button data-run="-1" title="Take a run off">-R</button></span></div>
+      </div>
+      <div class="lv-state">
+        <div class="lv-diamond" id="lvBases"><button data-lb="2"><span>2B</span></button><button data-lb="3"><span>3B</span></button><button data-lb="1"><span>1B</span></button></div>
+        <div class="lv-count" id="lvCount"></div>
+      </div>
+      <div class="lv-who"><div id="lvBat"></div><div id="lvPit"></div></div>
+      <div class="lv-pad lv-man" id="lvPad">
+        <div class="sep">Pitch</div>
+        <button class="b-ball" data-act="ball">Ball<small>B</small></button>
+        <button class="b-strike" data-act="strike">Strike<small>S</small></button>
+        <button data-act="foul">Foul<small>F</small></button>
+        <button data-act="undo">Undo<small>Z</small></button>
+        <div class="sep">Result</div>
+        <button class="b-out" data-act="out">Out<small>O</small></button>
+        <button data-act="walk">Walk / HBP<small>W</small></button>
+        <button data-act="h1">Single<small>1B</small></button>
+        <button data-act="h2">Double<small>2B</small></button>
+        <button data-act="h3">Triple<small>3B</small></button>
+        <button data-act="hr">Home run<small>HR</small></button>
+        <button data-act="error">Error<small>safe at 1st</small></button>
+        <button data-act="next">Next batter<small>N</small></button>
+      </div>
+      <div class="hint lv-man" id="lvHint">Every pitch adds to the pitcher's count. A third strike or out moves to the next batter; the third out switches the half inning. Hits move every runner up as many bases as the batter and score anyone who reaches home; tap the bases to fix runners. Next batter fills in from the lineup on the Scoring tab.</div>
+      <div class="hint" id="lvFeedHint" hidden></div>
+    </div>
+  </div>
+
+  <div data-panel="live" class="card" id="lvHotCard">
+    <div class="h">Hot buttons <span style="margin-left:auto;text-transform:none;letter-spacing:0">keys 1-9, 0; Shift for 11-20</span><button id="lvHotEdit" style="text-transform:none;letter-spacing:0">Edit</button></div>
+    <div class="body">
+      <div class="lv-hot" id="lvHot"></div>
+      <div class="lv-find" id="lvFind" hidden>
+        <input type="text" id="lvFindQ" placeholder="Search graphics to add (name or style)">
+        <div class="res" id="lvFindRes"></div>
+        <div class="hint">Up to 20 hot buttons, shared by every control panel on this server. Click a result to add or remove it.</div>
+      </div>
+    </div>
+  </div>
+
+  <details data-panel="custom" class="card" id="pickCard" open>
+    <summary>Player picker (spotlight, cards, bars, lower thirds)</summary>
+    <div class="body">
+      <div class="row"><button id="pkAway" style="flex:1">AWAY</button><button id="pkHome" style="flex:1">HOME</button>
+        <label class="row" style="margin:0 0 0 8px"><input type="checkbox" id="pkOn" style="width:auto"> <span style="text-transform:none;letter-spacing:0;color:var(--text)">Use picked player</span></label></div>
+      <input type="text" id="pkFilter" placeholder="Filter by name or number" style="margin-top:8px">
+      <div class="pick-list" id="pkList"></div>
+      <label style="margin-top:10px">Take with this player</label>
+      <div class="takes" id="pkTakes"></div>
+      <div class="hint">With "Use picked player" on, every player graphic (spotlight, stat cards and bars, tall cards, lower thirds, feature card) shows the player you pick instead of the current batter / pitcher. Turn it off to go back to live. Pitchers show pitching stats on the pitcher graphics; hitters show batting stats.</div>
+    </div>
+  </details>
+
+  <details data-panel="custom" class="card" id="talentCard" open>
+    <summary>Talent (announcers on the Talent lower third)</summary>
+    <div class="body g2">
+      <div><label>Talent 1 name</label><input type="text" id="sH1" placeholder="Jordan Ellis"></div><div><label>Talent 1 role</label><input type="text" id="sR1" placeholder="Play-by-play"></div>
+      <div><label>Talent 2 name</label><input type="text" id="sH2" placeholder="Sam Rivera"></div><div><label>Talent 2 role</label><input type="text" id="sR2" placeholder="Analyst"></div>
+      <div class="full row"><button class="btn-primary" id="talentTake" style="flex:1">Talent on / off</button></div>
+      <div class="full hint">The Talent graphic in every style shows these names (in the Podcast style it shows persons 1 and 2 from the PODCAST tab). Leave Talent 2 blank to show one person.</div>
+    </div>
+  </details>
+
+  <details data-panel="custom" class="card" id="tickCard">
+    <summary>Bottom ticker</summary>
+    <div class="body g2">
+      <div><label>Label</label><input type="text" id="tkLabel" placeholder="CBL"></div>
+      <div><label>Speed (px / sec)</label><input type="number" id="tkSpeed" min="30" max="400" step="10"></div>
+      <div class="full row"><label class="row" style="margin:0" data-api><input type="checkbox" id="tkScores" style="width:auto"> <span style="text-transform:none;letter-spacing:0;color:var(--text)">League scores</span></label>
+        <label class="row" style="margin:0 0 0 14px"><input type="checkbox" id="tkStand" style="width:auto"> <span style="text-transform:none;letter-spacing:0;color:var(--text)">Standings</span></label></div>
+      <div class="full"><label>Tidbits (one per line)</label><textarea id="tkText" rows="4" placeholder="Fireworks after the game tonight&#10;Next homestand starts Tuesday"></textarea></div>
+      <div class="full row"><button class="btn-primary" id="tkTake" style="flex:1">Ticker on / off</button></div>
+      <div class="hint full" data-manual>Standings come from the Manual scoring card. The ticker can stay on air with any other graphic.</div>
+    </div>
+  </details>
+
+  <details data-panel="custom" class="card" id="logoCard">
+    <summary>League &amp; broadcaster logos</summary>
+    <div class="body g2">
+      <div><label>League name</label><input type="text" id="lgName" placeholder="Coastal League"></div>
+      <div><label>League logo</label><div class="row"><input type="text" id="lgLogo" placeholder="URL or upload"><button data-up="lgLogo" data-name="league">Upload</button></div></div>
+      <div><label>Broadcaster name</label><input type="text" id="brName" placeholder="e.g. Gulls TV"></div>
+      <div><label>Broadcaster short name (bumpers)</label><input type="text" id="brShort" placeholder="e.g. FHTV"></div>
+      <div><label>Broadcaster colors (NETWORK transitions)</label><div class="row"><input type="color" id="brColor" value="#0A2240" style="width:60px;padding:2px"><input type="color" id="brColor2" value="#F5821F" style="width:60px;padding:2px"></div></div>
+      <div><label>Broadcaster logo (network graphic)</label><div class="row"><input type="text" id="brLogo" placeholder="URL or upload"><button data-up="brLogo" data-name="broadcaster">Upload</button></div></div>
+      <div class="hint full">The league logo appears on standings, the ticker and show title cards. The broadcaster logo is your network or stream mark (not a team): transitions, bumpers, show graphics, side panels and the Tonight card use it. It never falls back to the home team, so the home logo is not shown twice; with nothing set, those spots stay empty.</div>
+    </div>
+  </details>
+  <input type="file" id="upFile" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" hidden>
+
+
+  <div data-panel="graphics" class="card">
+    <div class="h">Graphics <span style="margin-left:auto;text-transform:none;letter-spacing:0">click to take in or out</span></div>
+    <div class="body">
+      <div class="setbar">
+        <label>Graphics set</label>
+        <div class="row" style="gap:6px">
+          <select id="setPick" style="flex:2"><option value="">All graphics</option></select>
+          <button id="setNew">New set</button>
+          <button id="setEdit">Edit set</button>
+          <button id="setDel">Delete</button>
+          <button id="setStyles" title="Rebuild one set per style (Night Game, Network, Retro, Classic Bar) and undo edits or deletes of style sets">Restore style sets</button>
+          <label class="row" style="gap:4px;flex:none;text-transform:none;letter-spacing:0;color:var(--text)"><input type="checkbox" id="libOn" style="width:auto"> Other packages</label>
+        </div>
+        <div id="setEditBar" class="hint" style="display:none;margin-top:6px">
+          <b>Editing set:</b> click tiles to add or remove them (editing a style set keeps your version; Restore style sets undoes it). Scorebugs, batter and pitcher lower thirds and the ticker allow one each.
+          <input type="text" id="setName" placeholder="Set name" style="margin:6px 0">
+          <button id="setDone" class="primary">Done</button>
+        </div>
+      </div>
+      <div class="tk-search">
+        <input type="text" id="tkQ" placeholder="Search graphics (press / to jump here)">
+        <label class="row" style="gap:4px;flex:none;margin:0;text-transform:none;letter-spacing:0;color:var(--text)" title="With no set picked, show every style's graphics instead of only the main style"><input type="checkbox" id="tkAll" style="width:auto"> All styles</label>
+      </div>
+      <div class="hint" id="tkNote" style="margin:-4px 0 8px"></div>
+      <div class="takes" id="takes"></div>
+      <button class="alloff" id="bAllOff">ALL GRAPHICS OUT</button>
+      <label style="margin-top:10px" class="row"><input type="checkbox" id="keepBug" checked style="width:auto"> <span style="text-transform:none;letter-spacing:0;color:var(--text)">Keep scorebug up on All Out</span></label>
+      <label style="margin-top:6px" class="row"><input type="checkbox" id="trigOn" style="width:auto"> <span style="text-transform:none;letter-spacing:0;color:var(--text)">Automatic stingers (Home Run, Wild Pitch, HR Tracker fire on the play)</span></label>
+    </div>
+  </div>
+
+  <details data-panel="custom" class="card" id="notesCard">
+    <summary>Notes &amp; stats (stat notes, feature card, HR distance)</summary>
+    <div class="body g2">
+      <div class="full"><label>Lower-third stat note</label><input type="text" id="nStat" placeholder=".150 opp. avg vs slider this season"></div>
+      <div class="full"><label>Stat note footnote</label><input type="text" id="nStatFoot" placeholder="6th lowest in the league, min. 200 sliders"></div>
+      <div class="full"><label>Feature kicker</label><input type="text" id="nKicker" placeholder="Harbor City's next star"></div>
+      <div class="full"><label>Feature title (blank = current batter)</label><input type="text" id="nTitle"></div>
+      <div class="full"><label>Bullet 1</label><input type="text" id="nB1"></div>
+      <div class="full"><label>Bullet 2</label><input type="text" id="nB2"></div>
+      <div class="full"><label>Bullet 3</label><input type="text" id="nB3"></div>
+      <div class="full"><label>Footnote (feature, comparison cards)</label><input type="text" id="nFoot"></div>
+      <div><label>HR distance (ft)</label><input type="text" id="nDist" placeholder="feed value wins"></div>
+      <div><label>Exit velocity (mph)</label><input type="text" id="nEv" placeholder="feed value wins"></div>
+      <div><label>Pitch speed (mph)</label><input type="text" id="nPs" placeholder="feed value wins"></div>
+      <div><label>Lower-third tab</label><input type="text" id="nTab" placeholder="LAST SEASON (blank = THIS SEASON)"></div>
+      <div><label>Compact scorebug title</label><input type="text" id="nBugTitle" placeholder="2026 OPENING DAY"></div>
+      <div><label>Lineup feature title</label><input type="text" id="nLfTitle" placeholder="LAST 7 GAMES (blank = THIS SEASON)"></div>
+      <div><label>Lineup feature line</label><input type="text" id="nLfLine" placeholder=".435 AVG | 4 XBH | 5 RBI (blank = season line)"></div>
+      <div><label>List card footnote</label><input type="text" id="nListFoot" placeholder="29-2 record when scoring 5+ runs"></div>
+      <div><label>Word bumper word</label><input type="text" id="nBumper" placeholder="LINEUP"></div>
+      <div class="full"><label>Batter vs pitcher (career)</label><input type="text" id="nBvp" placeholder="5 for 7, 2 HR, 1 RBI"></div>
+      <div class="full hint">The stat note replaces the default line on the note-style lower thirds while it has text; clear it after use. HR distance / exit velocity / pitch speed (Classic scorebug info rows) come from these fields. Clear them before the next home run.</div>
+    </div>
+  </details>
+
+  <details data-panel="custom" class="card" id="splitCard">
+    <summary>Split stat card</summary>
+    <div class="body g2">
+      <div class="full"><label>Title (blank = player name)</label><input type="text" id="spTitle"></div>
+      <div><label>Header</label><input type="text" id="spSub" placeholder="2026 SEASON"></div>
+      <div><label>Column labels</label><div class="row"><input type="text" id="spC1" placeholder="1st half"><input type="text" id="spC2" placeholder="2nd half"></div></div>
+      <div class="full"><label>Rows, one per line: label, value 1, value 2</label><textarea id="spRows" rows="5" placeholder="Games, 82, 69&#10;Average, .302, .206&#10;Home runs, 10, 6"></textarea></div>
+      <div class="full"><label>Footer</label><input type="text" id="spFoot" placeholder="Selected to the All-Star team"></div>
+      <div class="full hint">Blank rows show the current (or picked) batter's season next to tonight: at-bats, hits, home runs, RBI, average.</div>
+    </div>
+  </details>
+
+  <details data-panel="custom" class="card" id="presetCard" open>
+    <summary>Presets (your own graphics from layouts)</summary>
+    <div class="body">
+      <div class="row" style="gap:6px;margin-bottom:8px">
+        <select id="pfPick" style="flex:2"></select>
+        <select id="pfNewLayout" style="flex:1.4"></select>
+        <button id="pfNew">New</button>
+        <button id="pfCopy">Copy</button>
+        <button id="pfDel">Delete</button>
+      </div>
+      <div id="pfForm" class="g2"></div>
+      <div class="row" style="gap:6px;margin-top:8px">
+        <button id="pfTake" class="primary" style="flex:2">Take on / off</button>
+        <button id="pfPrev">&larr; Prev line</button>
+        <button id="pfNext">Next line &rarr;</button>
+        <button id="pfReveal">Reveal / hide answer</button>
+        <button id="pfClock">Restart clock</button>
+      </div>
+      <div class="hint">Each preset is its own take button (Graphics panel &gt; Your presets). Text can use data tokens such as {away.name}, {home.abbr} or {venue}. Lines: one per line, columns split with | . Restyle a layout in the editor (Layout: ...) and every preset made from it follows.</div>
+    </div>
+  </details>
+
+  <details data-panel="custom" class="card" id="schedCard">
+    <summary>Tonight's schedule, series probables, road ahead</summary>
+    <div class="body g2">
+      <div><label>Schedule title (blank = TONIGHT ON + broadcaster short name)</label><input type="text" id="scTitle"></div>
+      <div><label>Schedule header</label><input type="text" id="scSub" placeholder="UPCOMING SHOWS"></div>
+      <div class="full"><label>Shows, one per line: time | show | talent, talent</label><textarea id="scRows" rows="4" placeholder="5:00 | Gulls Lineup | Jordan Ellis, Sam Rivera&#10;6:00 | Pregame Live | Jordan Ellis, Sam Rivera, Chris Lee"></textarea></div>
+      <div class="full"><label>Schedule footer</label><input type="text" id="scFoot" placeholder="Ducks vs Gulls: 6:35 ET"></div>
+      <div><label>Probables title</label><input type="text" id="prTitle" placeholder="Gulls Series Probables"></div>
+      <div><label>Probables header</label><input type="text" id="prSub" placeholder="Tuesday - Thursday at Ducks"></div>
+      <div class="full"><label>Probables, one per line: name | stat line | second line</label><textarea id="prRows" rows="3" placeholder="Nick Martinez | 2-1, 2.97 ERA, 23 K | 5 starts"></textarea></div>
+      <div class="full"><label>Probables footer</label><input type="text" id="prFoot" placeholder="Ducks: starters have not been announced"></div>
+      <div class="full"><label>Road ahead title</label><input type="text" id="raTitle" placeholder="THE ROAD AHEAD"></div>
+      <div class="full"><label>Road ahead, 14 lines starting on a Monday: date | opponent (@ for away, blank = off day) | result or time + TV</label><textarea id="raRows" rows="6" placeholder="29 | @LI | W 4-2&#10;30 | @LI | W 5-4 (12)&#10;31 | @LI |&#10;1 | YORK | 6:35 FHTV&#10;5 | |"></textarea></div>
+      <div class="full hint">Probables photos come from the rosters by name. Road ahead logos come from media/logos named after the opponent you type (e.g. YRK.png); otherwise the abbreviation shows.</div>
+    </div>
+  </details>
+
+  <details data-panel="custom" class="card" id="umpCard">
+    <summary>Umpires</summary>
+    <div class="body">
+      <label>One per line: position, name, note</label>
+      <textarea id="umpText" rows="6" placeholder="HP, Sam Rivers (CC), 4th Wild Card&#10;1B, Dale Brooks, 3rd Wild Card&#10;2B, Lou Marsh&#10;3B, Tom Fenn"></textarea>
+      <div class="hint">Feeds the Umpires card. One umpire per line.</div>
+    </div>
+  </details>
+
+  <div data-panel="ops" id="opsCards"></div>
+
+  <div data-panel="podcast" id="podCards"></div>
+
+  <details data-panel="custom" class="card" id="colCard">
+    <summary>Colors (every graphic in a style)</summary>
+    <div class="body">
+      <label>Style</label>
+      <select id="colStyle"></select>
+      <div class="hint" style="margin:8px 0">Every color the style uses is listed, most used first. Pick a new one and it changes everywhere that color appears in that style
+        (panels, gradients, text, borders, shadows, tables), keeping its transparency. Team colors are in Scoring &gt; Teams, broadcaster colors in League &amp; broadcaster logos,
+        and a single element can be changed in the Editor.</div>
+      <div id="colList" class="collist"></div>
+      <div class="row" style="margin-top:10px"><button id="colMore" style="flex:1">Show all colors</button><button id="colReset" style="flex:1">Reset this style's colors</button></div>
+    </div>
+  </details>
+
+  <details data-panel="custom" class="card" id="showCard">
+    <summary>Show (batting practice / pregame / postgame)</summary>
+    <div class="body g2">
+      <div><label>Show bug name</label><input type="text" id="sName" list="showNames" placeholder="Pregame Live">
+        <datalist id="showNames"><option value="Batting Practice"><option value="Pregame Live"><option value="Postgame Live"><option value="Postgame Show"></datalist></div>
+      <div style="display:flex;align-items:flex-end"><label class="row" style="margin:0"><input type="checkbox" id="sLive" style="width:auto"> <span style="text-transform:none;letter-spacing:0;color:var(--text)">Show LIVE</span></label></div>
+      <div class="full" style="margin-top:4px"><label style="color:var(--text)">Batting practice info bar</label></div>
+      <div class="full"><label>Promotion image</label><div class="row"><input type="text" id="sPromoImg" placeholder="URL or upload (wide image, about 460 x 234)"><button id="sPromoUp">Upload</button></div></div>
+      <div class="full"><label>Promotion title (shown when there is no image)</label><input type="text" id="sPromoTitle" placeholder="Wu Wednesdays"></div>
+      <div><label>Row 1 label</label><input type="text" id="sI1L" placeholder="Game time"></div><div><label>Row 1 value</label><input type="text" id="sI1" placeholder="6:30 pm"></div>
+      <div><label>Row 2 label</label><input type="text" id="sI2L" placeholder="Gates open"></div><div><label>Row 2 value</label><input type="text" id="sI2" placeholder="5:30 pm"></div>
+      <div class="full"><label>QR code link</label><input type="text" id="sQr" placeholder="https://example.com/tickets"></div>
+      <div class="full"><label>QR call to action</label><input type="text" id="sQrText" placeholder="Scan QR code to buy tickets"></div>
+      <div class="full row"><button class="btn-primary" id="sBpTake" style="flex:1">BP Info Bar on / off</button><button id="sLbTake" style="flex:1">League Bug on / off</button></div>
+      <div class="full hint">The QR code is generated from the link as you type and scans on screen. Leave the link blank to show the "show" sponsor (or brand logo) in that spot. Rows with no value are hidden.</div>
+      <div class="full"><label>Title card subtitle</label><input type="text" id="sSub" placeholder="Presented live from the ballpark"></div>
+      <div class="full"><label>Up next 1</label><input type="text" id="sN1"></div>
+      <div class="full"><label>Up next 2</label><input type="text" id="sN2"></div>
+      <div class="full"><label>Up next 3</label><input type="text" id="sN3"></div>
+      <div class="full hint">Title cards use the theme logo / name (editor) or the home team's. Show graphics take sponsors from the "show" slot.</div>
+    </div>
+  </details>
+
+  <details data-panel="custom" class="card" open>
+    <summary>Custom lower third text</summary>
+    <div class="body g2">
+      <div class="full"><label>Line 1</label><input type="text" id="c1" placeholder="e.g. Tonight on the call"></div>
+      <div class="full"><label>Line 2</label><input type="text" id="c2" placeholder="e.g. Play-by-play and color"></div>
+      <div class="full"><label>Line 3</label><input type="text" id="c3" placeholder="optional"></div>
+    </div>
+  </details>
+
+  <div data-panel="scoring" class="card" id="sportSel">
+    <div class="h">Sport</div>
+    <div class="body row" style="gap:8px">
+      <select id="sportPick" style="flex:1"><option value="baseball">Baseball</option></select>
+      <span class="hint" style="margin:0;flex:2">Baseball uses the cards below. Basketball, football and hockey are scored by hand in the sport card. The graphics panel shows only this sport's graphics.</span>
+    </div>
+  </div>
+  <details data-panel="scoring" class="card" id="sportCard" open hidden>
+    <summary><span id="spTitle">Sport</span> scoring</summary>
+    <div class="body">
+      <div class="spclock">
+        <div><div class="lab">Clock <span id="spPer"></span></div><b id="spClock">0:00</b></div>
+        <div id="spShotBox"><div class="lab" id="spShotLab">Shot clock</div><b id="spShot">0</b></div>
+      </div>
+      <div class="row" style="flex-wrap:wrap;gap:6px;margin-top:8px">
+        <button class="btn-primary" id="spGo" style="flex:2">Start clock (space)</button>
+        <button data-op="clock_adj" data-n="-1">-1s</button><button data-op="clock_adj" data-n="1">+1s</button>
+        <input type="text" id="spClockSet" placeholder="12:00" style="width:80px"><button id="spClockSetB">Set</button>
+      </div>
+      <div class="row spShotRow" style="flex-wrap:wrap;gap:6px;margin-top:6px">
+        <button id="spShotFull">Reset shot clock</button><button id="spShotShort">Short reset</button>
+        <input type="text" id="spShotSet" placeholder="24" style="width:70px"><button id="spShotSetB">Set</button>
+      </div>
+      <div class="g2" style="margin-top:10px">
+        <div><label>Period</label><div class="stepper"><button data-op="period" data-n="-1">-</button><b id="spPeriod">1</b><button data-op="period" data-n="1">+</button></div></div>
+        <div><label>Status</label><select id="spStatus"><option>PRE</option><option>LIVE</option><option>FINAL</option></select></div>
+      </div>
+      <div class="spteams" id="spTeams"></div>
+      <div class="spfb" style="margin-top:10px">
+        <label>Down and distance</label>
+        <div class="row" style="flex-wrap:wrap;gap:6px">
+          <button data-op="down" data-n="1">1st</button><button data-op="down" data-n="2">2nd</button><button data-op="down" data-n="3">3rd</button><button data-op="down" data-n="4">4th</button>
+          <input type="text" id="spDist" placeholder="10 or Goal" style="width:90px"><input type="text" id="spBallOn" placeholder="Ball on (SI 35)" style="width:130px">
+          <button data-op="first_down">1st &amp; 10</button><button data-op="flag" id="spFlag">Flag</button>
+        </div>
+      </div>
+      <div class="sphk" style="margin-top:10px">
+        <label>Penalty</label>
+        <div class="row" style="flex-wrap:wrap;gap:6px">
+          <select id="spPenSide" style="width:auto"><option value="away">Away</option><option value="home">Home</option></select>
+          <input type="text" id="spPenLabel" placeholder="#12 Smith, Tripping" style="flex:1;min-width:140px">
+          <button data-pen="2">2 min</button><button data-pen="4">4 min</button><button data-pen="5">5 min</button><button data-pen="10">10 min</button>
+        </div>
+        <div id="spPens" class="hint" style="margin-top:6px"></div>
+      </div>
+      <details style="margin-top:10px"><summary class="hint" style="cursor:pointer">Player lower third, lineups, team stats, standings</summary>
+        <div class="g2" style="margin-top:8px">
+          <div><label>Player team</label><select data-sp="player.side"><option value="away">Away</option><option value="home">Home</option></select></div>
+          <div><label>Pick from lineup</label><select id="spPlayerPick"><option value="">-</option></select></div>
+          <div><label>Name</label><input type="text" data-sp="player.name"></div>
+          <div><label>Number / position</label><div class="row" style="gap:6px"><input type="text" data-sp="player.number" placeholder="#"><input type="text" data-sp="player.pos" placeholder="Pos"></div></div>
+          <div class="full"><label>Stat line</label><input type="text" data-sp="player.line" placeholder="18 PTS, 7 REB, 4 AST"></div>
+          <div class="full"><label>Note (optional)</label><input type="text" data-sp="player.note"></div>
+          <div><label>Away lineup (one per line: 12 Name POS stats)</label><textarea rows="7" data-sp="lineup_text.away"></textarea></div>
+          <div><label>Home lineup</label><textarea rows="7" data-sp="lineup_text.home"></textarea></div>
+          <div class="full"><label>Team stats (one per line: label | away | home)</label><textarea rows="5" data-sp="stats_text" placeholder="Shots on goal | 12 | 9&#10;Power plays | 1/3 | 0/2"></textarea></div>
+          <div class="full"><label>Standings (division name, then TEAM W L per line)</label><textarea rows="5" data-sp="standings_text"></textarea></div>
+        </div>
+      </details>
+      <details style="margin-top:8px"><summary class="hint" style="cursor:pointer">Game settings</summary>
+        <div class="g3" style="margin-top:8px">
+          <div><label>Periods</label><input type="number" data-sp="periods" data-num min="1" max="9"></div>
+          <div><label>Period minutes</label><input type="number" data-sp="periodMin" data-num min="1" max="60"></div>
+          <div><label>Overtime minutes</label><input type="number" data-sp="otMin" data-num min="1" max="30"></div>
+          <div class="spShotRow"><label>Shot / play clock (s)</label><input type="number" data-sp="shotLen" data-num min="0" max="60"></div>
+          <div class="spShotRow"><label>Short reset (s)</label><input type="number" data-sp="shotShort" data-num min="0" max="60"></div>
+          <div><label>Timeouts per team</label><input type="number" data-sp="timeoutsPer" data-num min="0" max="9"></div>
+          <div class="spbk"><label>Bonus at team fouls</label><input type="number" data-sp="bonusAt" data-num min="1" max="15"></div>
+        </div>
+        <div class="row" style="margin-top:8px"><button id="spNew">New game (scores and clock reset, names kept)</button></div>
+      </details>
+    </div>
+  </details>
+
+  <details data-panel="custom" class="card" id="phCard">
+    <summary>Players &amp; headshots <span id="phNote" style="text-transform:none;letter-spacing:0"></span></summary>
+    <div class="body">
+      <div class="ph-tabs" id="phTabs"></div>
+      <div class="row" style="flex-wrap:wrap;margin-bottom:8px">
+        <button id="phBulk">Upload many...</button>
+        <input type="file" id="phFiles" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" multiple hidden>
+        <input type="file" id="phOne" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" hidden>
+      </div>
+      <div class="ph-list" id="phList"></div>
+      <div class="hint">Drag an image onto a player, or click Upload. For Upload many, name each file after the player (alex-rivera.png) or team and number (si-24.png). Transparent PNG cutouts look best on Player Spotlight and Due Up. Uploaded photos always win over feed photos.</div>
+      <div data-api><label style="margin-top:12px">Headshot URL pattern (optional)</label>
+      <div class="row"><input type="text" id="phPattern" placeholder="https://yoursite.com/headshots/{slug}.png"><button id="phPatternSave">Save</button></div>
+      <div class="hint">Fills {slug} (alex-rivera), {first}, {last}, {name}, {number}, {team} (abbreviation, lowercase), {id}. Used for players without an uploaded photo; a feed photo is used if neither exists.</div></div>
+    </div>
+  </details>
+
+  <details data-panel="custom" class="card" id="spCard">
+    <summary>Sponsors <span id="spNote" style="text-transform:none;letter-spacing:0"></span></summary>
+    <div class="body">
+      <label>Sponsor library</label>
+      <div class="sp-lib" id="spLib"></div>
+      <div class="row" style="margin-top:8px;flex-wrap:wrap">
+        <button id="spAdd">+ Add sponsor</button>
+        <button id="spUpload">Upload logo...</button>
+        <input type="file" id="spFile" accept="image/png,image/svg+xml,image/webp,image/jpeg,image/gif" hidden>
+        <select id="spMedia" style="width:auto"><option value="">Add from media/sponsors...</option></select>
+      </div>
+      <div class="hint">Transparent PNG or SVG logos read best. Untick a sponsor to pause it everywhere without losing its setup.</div>
+
+      <label style="margin-top:14px">Sponsor slots</label>
+      <div class="hint" style="margin-top:0">Each graphic points at a slot. Turn a slot on, pick one sponsor, or several to rotate on a timer.</div>
+      <div id="spSlots"></div>
+
+      <label style="margin-top:14px">Exposure report</label>
+      <div class="row" style="flex-wrap:wrap">
+        <select id="spDay" style="width:auto"></select>
+        <a href="/api/sponsors/log.csv" id="spCsv" style="color:var(--acc)">Download CSV (all days)</a>
+        <button id="spReset" style="margin-left:auto">Reset log</button>
+      </div>
+      <table class="rep" id="spRep"></table>
+      <label class="row" style="margin-top:8px"><input type="checkbox" id="spLive" style="width:auto">
+        <span style="text-transform:none;letter-spacing:0;color:var(--text)">In OBS, count only while streaming or recording</span></label>
+      <div class="hint">On-air time is counted each second a sponsored graphic is taken in; takes count each time it goes in. It measures the graphics output, not whether the scene holding it is on program.</div>
+    </div>
+  </details>
+
+  <details data-panel="scoring" class="card">
+    <summary>Teams: colors, logos, name overrides</summary>
+    <div class="body g2" id="teamsBox"></div>
+  </details>
+
+  <details data-panel="scoring" class="card" id="manCard" data-bb>
+    <summary>Manual scoring <span id="manNote" style="text-transform:none;letter-spacing:0"></span></summary>
+    <div class="body">
+      <div class="mgrid" id="mgrid"></div>
+      <div class="g2" style="margin-top:12px">
+        <div><label>Inning</label><div class="stepper"><button data-inn="-1">-</button><b id="mInn">1</b><button data-inn="1">+</button>
+          <button id="mHalf" style="width:auto;padding:6px 10px">TOP</button></div></div>
+        <div><label>Status</label><select id="mStatus"><option>PRE</option><option>LIVE</option><option>FINAL</option></select></div>
+      </div>
+      <div class="count" style="margin-top:12px" id="mCount"></div>
+      <div class="row" style="margin-top:10px"><span class="hint" style="margin:0">Bases</span>
+        <div class="bases"><button data-b="3">3B</button><button data-b="2">2B</button><button data-b="1">1B</button></div>
+        <button id="mClearCount">New batter</button><button id="mClearBases">Clear bases</button></div>
+      <div class="g2" style="margin-top:12px">
+        <div class="full"><label>Batter (name, #, pos, bats, AVG, HR, RBI, today)</label>
+          <div class="g3"><input type="text" data-m="batter.name" placeholder="Name"><input type="text" data-m="batter.number" placeholder="#"><input type="text" data-m="batter.pos" placeholder="Pos">
+          <input type="text" data-m="batter.bats" placeholder="Bats"><input type="text" data-m="batter.avg" placeholder="AVG"><input type="text" data-m="batter.hr" placeholder="HR">
+          <input type="text" data-m="batter.rbi" placeholder="RBI"><input type="text" data-m="batter.ops" placeholder="OPS"><input type="text" data-m="batter.line" placeholder="Today 1-2, 2B"></div></div>
+        <div class="full"><label>Pitcher (name, #, throws, ERA, PC, IP, K)</label>
+          <div class="g3"><input type="text" data-m="pitcher.name" placeholder="Name"><input type="text" data-m="pitcher.number" placeholder="#"><input type="text" data-m="pitcher.throws" placeholder="L/R">
+          <input type="text" data-m="pitcher.era" placeholder="ERA"><input type="text" data-m="pitcher.pc" placeholder="Pitches"><input type="text" data-m="pitcher.ip" placeholder="IP">
+          <input type="text" data-m="pitcher.k" placeholder="K"></div></div>
+        <div><label>Away lineup (one per line: 1 Name POS .300)</label><textarea rows="9" data-m="lineup_text.away"></textarea></div>
+        <div><label>Home lineup</label><textarea rows="9" data-m="lineup_text.home"></textarea></div>
+        <div class="full"><label>Standings (a division name on its own line, then TEAM W L per line)</label>
+          <textarea rows="8" data-m="standings_text" placeholder="North Division&#10;Harbor City Gulls 52 37&#10;Riverside Otters 48 41"></textarea></div>
+      </div>
+    </div>
+  </details>
+
+  <details data-panel="graphics" class="card">
+    <summary>OBS browser source URLs</summary>
+    <div class="body urls" id="urls"></div>
+  </details>
+</div>
+<div id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var S = { game: null, ui: null, templates: null, status: null, config: null };
+  function curSport() { return (S.ui && S.ui.sport) || 'baseball'; }
+  function toast(m) { var t = $('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(function () { t.classList.remove('show'); }, 1800); }
+  function post(p, b) { return GFX.api(p, b); }
+  function debounce(fn, ms) { var h; return function () { var a = arguments; clearTimeout(h); h = setTimeout(function () { fn.apply(null, a); }, ms); }; }
+  function setPath(o, p, v) { var k = p.split('.'), l = k.pop(); k.reduce(function (a, x) { return a[x] = a[x] || {}; }, o)[l] = v; }
+  function getPath(o, p) { return p.split('.').reduce(function (a, x) { return a == null ? undefined : a[x]; }, o); }
+
+  // ------------------------------------------------------------ takes
+  function renderTakes() {
+    var box = $('takes');
+    var defs = (S.templates && S.templates.graphics) || {};
+    var vis = (S.ui && S.ui.visible) || {};
+    var sides = (S.ui && S.ui.sides) || {};
+    var CATS = (S.categories && S.categories.length) ? S.categories : [{ key: 'other', label: 'Graphics', single: false }];
+    var SECS = CATS.map(function (c) { return [c.key, c.label]; });
+    var sets = (S.ui && S.ui.sets) || {}, act = S.ui && S.ui.activeSet, curSet = act && sets[act];
+    var inSet = curSet && curSet.gids && curSet.gids.length ? curSet.gids : null;
+    var allStyles = $('tkAll').checked;
+    function secOf(gid, d) {
+      if (d.layout) return null;
+      if (inSet && !setEditing && inSet.indexOf(gid) < 0) return null;
+      if (!inSet && !allStyles && d.libPkg) return null;     // no set picked: main style only unless All styles
+      var sp = d.sport || 'baseball';
+      if (sp !== 'all' && sp !== curSport()) return null;      // other sports' graphics stay hidden
+      return d.cat || 'other';
+    }
+    var tkKey = Object.keys(defs).join() + '|' + (inSet ? inSet.join() : '') + '|' + setEditing + '|' + curSport() + '|' + allStyles;
+    if (box._keys !== tkKey) {
+      box.innerHTML = '';
+      var order = [];
+      SECS.forEach(function (s) {
+        var ids = Object.keys(defs).filter(function (gid) { return secOf(gid, defs[gid]) === s[0]; });
+        if (ids.length) order.push({ head: s[1] });
+        order = order.concat(ids.map(function (gid) { return { gid: gid }; }));
+      });
+      order.forEach(function (it) {
+        if (it.head) { var h = document.createElement('div'); h.className = 'tk-sec'; h.textContent = it.head; box.appendChild(h); return; }
+        var gid = it.gid;
+        var d = defs[gid];
+        var c = document.createElement('div');
+        c.className = 'take';
+        c.dataset.g = gid;
+        c.innerHTML = '<button class="go"><span class="nm"></span><span class="meta"></span></button>' +
+          (d.sided ? '<div class="sides">' + (d.side === 'batting' || d.side === 'fielding' ? '<button data-s="' + d.side + '" title="Follows the ' + d.side + ' team">AUTO</button>' : '') +
+            '<button data-s="away">AWAY</button><button data-s="home">HOME</button>' + (d.network ? '<button data-s="network">NETWORK</button>' : '') + '</div>' : '') +
+          (d.groupPicker ? '<div class="sides grp"></div>' : '') +
+          (d.trigger ? '<div class="sides"><button class="auto" title="Fire automatically on ' + d.trigger + '">AUTO ' + d.trigger + '</button></div>' : '');
+        c.querySelector('.nm').textContent = d.name || gid;
+        c.querySelector('.meta').textContent = [d.group ? d.group : '', d.autoHide ? 'auto out ' + d.autoHide + 's' : ''].filter(Boolean).join('  |  ');
+        c.querySelector('.go').onclick = function () {
+          if (setEditing) { toggleInSet(gid, d); return; }
+          var w = emptyWarning(gid, d);
+          if (w && !((S.ui && S.ui.visible) || {})[gid]) flash(w);
+          post('/api/toggle', { g: gid });
+        };
+        var ab = c.querySelector('.auto');
+        if (ab) ab.onclick = function () {
+          var off = (S.ui && S.ui.triggers && S.ui.triggers.off) || {}, p = { triggers: { off: {} } };
+          p.triggers.off[gid] = !off[gid];
+          post('/api/ui', p);
+        };
+        c.querySelectorAll('[data-s]').forEach(function (b) {
+          b.onclick = function () { var p = { sides: {} }; p.sides[gid] = b.dataset.s; post('/api/ui', p); };
+        });
+        box.appendChild(c);
+      });
+      box._keys = tkKey;
+      var nLib = Object.keys(defs).filter(function (g) { return defs[g].libPkg && !defs[g].layout; }).length;
+      $('tkNote').textContent = inSet ? '' : (allStyles ? 'Showing every style. Pick a set above, or untick All styles, to narrow the list.' :
+        (nLib ? 'Showing the main style only. ' + nLib + ' graphics from other styles are hidden: pick a style set above or tick All styles.' : ''));
+      tkFilter();
+    }
+    box.classList.toggle('editing', !!setEditing);
+    var editIds = setEditing ? (((sets[setEditing] || {}).gids) || []) : null;
+    box.querySelectorAll('.take').forEach(function (c) {
+      var gid = c.dataset.g, d = defs[gid] || {};
+      c.classList.toggle('on', !!vis[gid]);
+      c.classList.toggle('inset', !!(editIds && editIds.indexOf(gid) >= 0));
+      c.classList.toggle('outset', !!(editIds && editIds.indexOf(gid) < 0));
+      var ab2 = c.querySelector('.auto');
+      if (ab2) ab2.classList.toggle('sel', !(((S.ui && S.ui.triggers && S.ui.triggers.off) || {})[gid]));
+      var side = sides[gid] || d.side || 'home';
+      c.querySelectorAll('[data-s]').forEach(function (b) {
+        b.classList.toggle('sel', b.dataset.s === side);
+        var t = S.game && S.game[b.dataset.s];
+        if (b.dataset.s === 'away' || b.dataset.s === 'home') b.textContent = (t && t.abbr) || b.dataset.s.toUpperCase();
+      });
+      var gp = c.querySelector('.grp');
+      if (gp) {
+        var groups = (S.game && S.game.standings && S.game.standings.groups) || [];
+        var cur = (S.ui && S.ui.groups && S.ui.groups[gid]) || 0;
+        var sig = groups.map(function (g) { return g.name; }).join('|') + '#' + cur;
+        if (gp._sig !== sig) {
+          gp._sig = sig;
+          gp.innerHTML = groups.length ? '' : '<button disabled style="flex:1">No standings yet</button>';
+          groups.forEach(function (g, i) {
+            var b = document.createElement('button');
+            b.textContent = (g.name || 'Group ' + (i + 1)).replace(/ Division$/i, '').slice(0, 14).toUpperCase();
+            b.title = g.name;
+            b.className = i === cur ? 'sel' : '';
+            b.onclick = function () { var p = { groups: {} }; p.groups[gid] = i; post('/api/ui', p); };
+            gp.appendChild(b);
+          });
+        }
+      }
+    });
+  }
+
+  // Graphics tab search: hides tiles (and empty section heads) whose name does not contain every typed word.
+  function tkFilter() {
+    var words = $('tkQ').value.toLowerCase().split(/\s+/).filter(Boolean), head = null, any = false;
+    Array.prototype.forEach.call($('takes').children, function (el) {
+      if (el.classList.contains('tk-sec')) { if (head) head.classList.toggle('nomatch', !any); head = el; any = false; return; }
+      var nm = ((el.querySelector('.nm') || {}).textContent || '').toLowerCase();
+      var ok = words.every(function (w) { return nm.indexOf(w) >= 0; });
+      el.classList.toggle('nomatch', !ok); if (ok) any = true;
+    });
+    if (head) head.classList.toggle('nomatch', !any);
+  }
+  $('tkQ').oninput = tkFilter;
+  $('tkQ').onkeydown = function (e) { if (e.key === 'Escape') { this.value = ''; tkFilter(); this.blur(); } };
+  try { $('tkAll').checked = localStorage.getItem('fh.tkAll') === '1'; } catch (e) {}
+  $('tkAll').onchange = function () { try { localStorage.setItem('fh.tkAll', this.checked ? '1' : '0'); } catch (e) {} renderTakes(); };
+
+  // ----------------------------------------------------------- status
+  function renderStatus() {
+    var st = S.status || {};
+    $('dot').className = 'dot ' + (st.ok ? 'ok' : 'bad');
+    var age = st.updated ? Math.round(Date.now() / 1000 - st.updated) : null;
+    if (S.notice && Date.now() < S.notice.until) { $('msg').textContent = S.notice.text; $('msg').style.color = '#ffb347'; }
+    else { $('msg').style.color = ''; $('msg').textContent = (st.source ? st.source.toUpperCase() + ': ' : '') + (st.message || '') + (age != null && st.ok ? '  (' + age + 's ago)' : ''); }
+    var g = S.game;
+    if (g && g.away) {
+      $('score').textContent = (g.away.abbr || 'AWY') + ' ' + g.away.runs + '  ' + (g.home.abbr || 'HOM') + ' ' + g.home.runs + '   ' +
+        (g.sp ? (g.sp.statusText || '') : (g.isFinal ? 'FINAL' : g.inningLabel + '  ' + g.count + '  ' + g.outs + ' out'));
+    }
+  }
+  setInterval(renderStatus, 1000);
+
+  // ----------------------------------------------------------- custom
+  var NOTE_FIELDS = [['nStat', 'stat'], ['nStatFoot', 'statFoot'], ['nKicker', 'kicker'], ['nTitle', 'title'], ['nB1', 'b1'], ['nB2', 'b2'], ['nB3', 'b3'],
+    ['nFoot', 'foot'], ['nDist', 'dist'], ['nEv', 'ev'], ['nPs', 'ps'], ['nTab', 'tab'], ['nBugTitle', 'bugTitle'], ['nLfTitle', 'lfTitle'], ['nLfLine', 'lfLine'], ['nListFoot', 'listFoot'], ['nBumper', 'bumperWord'], ['nBvp', 'bvp']];
+  var SHOW_FIELDS = [['sPromoImg', 'promoImage'], ['sPromoTitle', 'promoTitle'], ['sI1L', 'info1Label'], ['sI1', 'info1'], ['sI2L', 'info2Label'], ['sI2', 'info2'],
+    ['sQr', 'qrUrl'], ['sQrText', 'qrText'], ['sName', 'name'], ['sSub', 'sub'], ['sN1', 'next1'], ['sN2', 'next2'], ['sN3', 'next3'], ['sH1', 'host1'], ['sR1', 'role1'], ['sH2', 'host2'], ['sR2', 'role2']];
+  var sendNotes = debounce(function () { var n = {}; NOTE_FIELDS.forEach(function (p) { n[p[1]] = $(p[0]).value; }); post('/api/ui', { notes: n }); }, 250);
+  var sendShow = debounce(function () { var n = { live: $('sLive').checked }; SHOW_FIELDS.forEach(function (p) { n[p[1]] = $(p[0]).value; }); post('/api/ui', { show: n }); }, 250);
+  NOTE_FIELDS.forEach(function (p) { $(p[0]).oninput = sendNotes; });
+  var SPLIT_FIELDS = [['spTitle', 'title'], ['spSub', 'sub'], ['spC1', 'col1'], ['spC2', 'col2'], ['spRows', 'rows'], ['spFoot', 'foot']];
+  var sendSplit = debounce(function () { var n = {}; SPLIT_FIELDS.forEach(function (p) { n[p[1]] = $(p[0]).value; }); post('/api/ui', { split: n }); }, 300);
+  SPLIT_FIELDS.forEach(function (p) { $(p[0]).oninput = sendSplit; });
+  var LIST_FIELDS = { schedule: [['scTitle', 'title'], ['scSub', 'sub'], ['scRows', 'rows'], ['scFoot', 'foot']],
+    probables: [['prTitle', 'title'], ['prSub', 'sub'], ['prRows', 'rows'], ['prFoot', 'foot']], roadAhead: [['raTitle', 'title'], ['raRows', 'rows']] };
+  Object.keys(LIST_FIELDS).forEach(function (key) {
+    var send = debounce(function () { var n = {}; LIST_FIELDS[key].forEach(function (p) { n[p[1]] = $(p[0]).value; }); var b = {}; b[key] = n; post('/api/ui', b); }, 350);
+    LIST_FIELDS[key].forEach(function (p) { $(p[0]).oninput = send; });
+  });
+  // ------------------------------------------------------------ other sports (basketball, football, hockey)
+  function sportSt() { var a = (S.ui && S.ui.sports) || {}; return a[curSport()] || {}; }
+  function spOp(b) { b.sport = curSport(); return post('/api/sport', b); }
+  function spSet(path, v) {
+    var o = {}, cur = o, k = path.split('.');
+    for (var i = 0; i < k.length - 1; i++) { cur[k[i]] = {}; cur = cur[k[i]]; }
+    cur[k[k.length - 1]] = v;
+    var b = { sports: {} }; b.sports[curSport()] = o; return post('/api/ui', b);
+  }
+  var spSend = debounce(spSet, 350);
+  function spMs(c) {
+    c = c || {};
+    var srv = Date.now() + (GFX.serverOffset || 0);
+    return Math.max(0, (Number(c.ms) || 0) - (c.running && c.at ? Math.max(0, srv - c.at) : 0));
+  }
+  function spFmt(ms, tenths) {
+    if (tenths && ms < 60000) return (Math.floor(ms / 100) / 10).toFixed(1);
+    var t = Math.ceil(ms / 1000); return Math.floor(t / 60) + ':' + ('0' + (t % 60)).slice(-2);
+  }
+  setInterval(function () {
+    var sp = S.game && S.game.sp; if (!sp || $('sportCard').hidden) return;
+    $('spClock').textContent = spFmt(spMs(sp.clock), curSport() === 'basketball');
+    $('spShot').textContent = curSport() === 'basketball' && spMs(sp.shot) < 10000 ? (Math.floor(spMs(sp.shot) / 100) / 10).toFixed(1) : String(Math.ceil(spMs(sp.shot) / 1000));
+    $('spGo').textContent = sp.clock && sp.clock.running ? 'Stop clock (space)' : 'Start clock (space)';
+    $('spGo').classList.toggle('btn-primary', !(sp.clock && sp.clock.running));
+  }, 150);
+  function renderSport() {
+    var sp = curSport(), st = sportSt(), info = (S.sports || []).filter(function (x) { return x.key === sp; })[0];
+    var sel = $('sportPick');
+    if (sel.options.length < 2 && S.sports) S.sports.forEach(function (x) { var o = document.createElement('option'); o.value = x.key; o.textContent = x.label; sel.appendChild(o); });
+    sel.value = sp;
+    var other = sp !== 'baseball';
+    document.body.classList.toggle('sport-other', other);
+    $('sportCard').hidden = !other;
+    if (!other || !info) return;
+    $('spTitle').textContent = info.label;
+    document.querySelectorAll('.spfb').forEach(function (e) { e.style.display = sp === 'football' ? '' : 'none'; });
+    document.querySelectorAll('.sphk').forEach(function (e) { e.style.display = sp === 'hockey' ? '' : 'none'; });
+    document.querySelectorAll('.spbk').forEach(function (e) { e.style.display = sp === 'basketball' ? '' : 'none'; });
+    document.querySelectorAll('.spShotRow, #spShotBox').forEach(function (e) { e.style.display = sp === 'hockey' ? 'none' : ''; });
+    $('spShotLab').textContent = sp === 'football' ? 'Play clock' : 'Shot clock';
+    $('spPeriod').textContent = (S.game && S.game.sp && S.game.sp.periodLabel) || st.period || 1;
+    $('spPer').textContent = (S.game && S.game.sp && S.game.sp.statusText) || '';
+    $('spStatus').value = st.status || 'PRE';
+    $('spFlag').classList.toggle('btn-primary', !!st.flag);
+    if (document.activeElement !== $('spDist')) $('spDist').value = st.dist || '';
+    if (document.activeElement !== $('spBallOn')) $('spBallOn').value = st.ballOn || '';
+    // teams
+    var box = $('spTeams'), key = sp + (info.points || []).join();
+    if (box._key !== key) {
+      box._key = key; box.innerHTML = '';
+      ['away', 'home'].forEach(function (side) {
+        var r = document.createElement('div'); r.className = 'spteam'; r.dataset.side = side;
+        var pts = (info.points || []).map(function (n) { return '<button data-sc="' + n + '">+' + n + '</button>'; }).join('');
+        r.innerHTML = '<div class="row" style="gap:6px"><input type="text" data-sp="' + side + '.abbr" placeholder="' + side.toUpperCase() + '" style="width:70px">' +
+          '<input type="text" data-sp="' + side + '.name" placeholder="Team name" style="flex:1"><b class="spscore" data-spv="' + side + '.score">0</b></div>' +
+          '<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px">' + pts + '<button data-sc="-1">-1</button>' +
+          (sp !== 'hockey' ? '<button data-poss>Possession</button>' : '<button data-en>Empty net</button>') + '</div>' +
+          '<div class="row" style="gap:12px;flex-wrap:wrap;margin-top:6px">' +
+          '<span class="stepper"><span class="lab">Timeouts</span><button data-k="timeouts" data-n="-1">-</button><b data-spv="' + side + '.timeouts">0</b><button data-k="timeouts" data-n="1">+</button></span>' +
+          (sp === 'basketball' ? '<span class="stepper"><span class="lab">Fouls</span><button data-k="fouls" data-n="-1">-</button><b data-spv="' + side + '.fouls">0</b><button data-k="fouls" data-n="1">+</button></span>' : '') +
+          (sp === 'hockey' ? '<span class="stepper"><span class="lab">Shots</span><button data-k="shots" data-n="-1">-</button><b data-spv="' + side + '.shots">0</b><button data-k="shots" data-n="1">+</button></span>' : '') +
+          '</div>';
+        r.querySelectorAll('[data-sc]').forEach(function (b) { b.onclick = function () { spOp({ op: 'score', side: side, n: Number(b.dataset.sc) }); }; });
+        r.querySelectorAll('[data-k]').forEach(function (b) { b.onclick = function () { spOp({ op: b.dataset.k, side: side, n: Number(b.dataset.n) }); }; });
+        var pb = r.querySelector('[data-poss]'); if (pb) pb.onclick = function () { spOp({ op: 'poss', side: side }); };
+        var eb = r.querySelector('[data-en]'); if (eb) eb.onclick = function () { spOp({ op: 'en', side: side }); };
+        box.appendChild(r);
+      });
+      bindSportInputs();
+    }
+    document.querySelectorAll('[data-spv]').forEach(function (b) { b.textContent = getPath(st, b.dataset.spv) || 0; });
+    document.querySelectorAll('.spteam').forEach(function (r) {
+      var side = r.dataset.side, t = st[side] || {};
+      var pb = r.querySelector('[data-poss]'); if (pb) pb.classList.toggle('btn-primary', st.poss === side);
+      var eb = r.querySelector('[data-en]'); if (eb) eb.classList.toggle('btn-primary', !!t.en);
+    });
+    document.querySelectorAll('[data-sp]').forEach(function (e) {
+      if (document.activeElement === e) return;
+      var v = getPath(st, e.dataset.sp); e.value = v == null ? '' : v;
+    });
+    // penalties
+    var pl = [];
+    ['away', 'home'].forEach(function (side) {
+      ((S.game && S.game[side] && S.game[side].pens) || []).forEach(function (p, i) {
+        pl.push('<span class="pen">' + GFX.esc(((st[side] || {}).abbr || side).toUpperCase()) + ' ' + GFX.esc(p.label || (p.min + ' min')) +
+          ' <b data-penclock="' + side + ':' + i + '">' + spFmt(spMs(p.clock), false) + '</b> <button data-penx="' + side + ':' + i + '">x</button></span>');
+      });
+    });
+    $('spPens').innerHTML = pl.length ? pl.join(' ') : 'No penalties';
+    $('spPens').querySelectorAll('[data-penx]').forEach(function (b) {
+      var k = b.dataset.penx.split(':'); b.onclick = function () { spOp({ op: 'penalty_clear', side: k[0], n: Number(k[1]) }); };
+    });
+    // lineup picker for the player lower third
+    var pick = $('spPlayerPick'), side = (st.player || {}).side || 'home';
+    var rows = (S.game && S.game[side] && S.game[side].lineup) || [], pk = side + rows.map(function (r) { return r.name; }).join();
+    if (pick._key !== pk) {
+      pick._key = pk;
+      pick.innerHTML = '<option value="">-</option>' + rows.map(function (r, i) { return '<option value="' + i + '">' + GFX.esc((r.number ? '#' + r.number + ' ' : '') + r.name) + '</option>'; }).join('');
+    }
+  }
+  setInterval(function () {
+    document.querySelectorAll('[data-penclock]').forEach(function (b) {
+      var k = b.dataset.penclock.split(':'), p = ((S.game && S.game[k[0]] && S.game[k[0]].pens) || [])[Number(k[1])];
+      if (p) b.textContent = spFmt(spMs(p.clock), false);
+    });
+  }, 500);
+  function bindSportInputs() {
+    document.querySelectorAll('[data-sp]').forEach(function (e) {
+      if (e._spb) return; e._spb = true;
+      var h = function () { spSend(e.dataset.sp, e.hasAttribute('data-num') ? Number(e.value) : e.value); };
+      e.oninput = h; e.onchange = h;
+    });
+  }
+  bindSportInputs();
+  $('sportPick').onchange = function () { post('/api/ui', { sport: this.value }).then(function () { toast('Sport: ' + $('sportPick').options[$('sportPick').selectedIndex].text); }); };
+  $('spGo').onclick = function () { spOp({ op: 'toggle' }); };
+  $('spClockSetB').onclick = function () { spOp({ op: 'clock_set', value: $('spClockSet').value }); };
+  $('spShotFull').onclick = function () { spOp({ op: 'shot_reset' }); };
+  $('spShotShort').onclick = function () { spOp({ op: 'shot_reset', n: Number(sportSt().shotShort) || 14 }); };
+  $('spShotSetB').onclick = function () { spOp({ op: 'shot_set', value: $('spShotSet').value }); };
+  $('spStatus').onchange = function () { spOp({ op: 'status', value: this.value }); };
+  $('spDist').oninput = debounce(function () { spSet('dist', $('spDist').value); }, 350);
+  $('spBallOn').oninput = debounce(function () { spSet('ballOn', $('spBallOn').value); }, 350);
+  $('spNew').onclick = function () { spOp({ op: 'new_game' }); };
+  $('spPlayerPick').onchange = function () {
+    var st = sportSt(), side = (st.player || {}).side || 'home', r = ((S.game && S.game[side] && S.game[side].lineup) || [])[Number(this.value)];
+    if (!r) return;
+    var b = { sports: {} }; b.sports[curSport()] = { player: { name: r.name, number: r.number, pos: r.pos, line: r.line || '' } }; post('/api/ui', b);
+  };
+  document.querySelectorAll('#sportCard [data-op]').forEach(function (b) {
+    b.onclick = function () { var o = { op: b.dataset.op }; if (b.dataset.n) o.n = Number(b.dataset.n); spOp(o); };
+  });
+  document.querySelectorAll('#sportCard [data-pen]').forEach(function (b) {
+    b.onclick = function () { spOp({ op: 'penalty_add', side: $('spPenSide').value, min: Number(b.dataset.pen), label: $('spPenLabel').value }); $('spPenLabel').value = ''; };
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.code !== 'Space' || $('sportCard').hidden) return;
+    var t = e.target && e.target.tagName; if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT' || t === 'BUTTON') return;
+    e.preventDefault(); spOp({ op: 'toggle' });
+  });
+
+  // ------------------------------------------------------------ graphics sets
+  var setEditing = '';
+  function setsObj() { return (S.ui && S.ui.sets) || {}; }
+  function renderSets() {
+    var sel = $('setPick'), sets = setsObj(), ids = Object.keys(sets).sort(function (a, b) { return String(sets[a].name).localeCompare(String(sets[b].name)); });
+    var key = ids.map(function (i) { return i + ':' + sets[i].name + ':' + (sets[i].gids || []).length; }).join();
+    if (sel._key !== key) {
+      sel.innerHTML = '<option value="">All graphics</option>';
+      // style sets (one per graphics style, made automatically) first, then the sets you made
+      [['Styles (automatic)', function (i) { return i.indexOf('style_') === 0; }], ['Your sets', function (i) { return i.indexOf('style_') !== 0; }]].forEach(function (grp) {
+        var mine = ids.filter(grp[1]); if (!mine.length) return;
+        var og = document.createElement('optgroup'); og.label = grp[0];
+        mine.forEach(function (i) { var o = document.createElement('option'); o.value = i;
+          o.textContent = sets[i].name + ' (' + (sets[i].gids || []).length + ')' + (i.indexOf('style_') === 0 && sets[i].auto === false ? ' - edited' : ''); og.appendChild(o); });
+        sel.appendChild(og);
+      });
+      sel._key = key;
+    }
+    sel.value = (S.ui && S.ui.activeSet) || '';
+    $('libOn').checked = !(S.ui && S.ui.library === false);
+    $('setEditBar').style.display = setEditing ? '' : 'none';
+    if (setEditing && document.activeElement !== $('setName')) $('setName').value = (sets[setEditing] || {}).name || '';
+  }
+  function saveSet(id, patch) { var b = { sets: {} }; b.sets[id] = patch; return post('/api/ui', b); }
+  function toggleInSet(gid, d) {
+    var st = setsObj()[setEditing]; if (!st) return;
+    var ids = (st.gids || []).slice(), i = ids.indexOf(gid);
+    var cat = (S.categories || []).filter(function (c) { return c.key === d.cat; })[0];
+    if (i >= 0) ids.splice(i, 1);
+    else {
+      if (cat && cat.single) {
+        var defs = (S.templates && S.templates.graphics) || {};
+        ids = ids.filter(function (x) { return !defs[x] || defs[x].cat !== d.cat || (defs[x].sport || 'baseball') !== (d.sport || 'baseball'); });
+      }
+      ids.push(gid);
+    }
+    // gids is a list: send it whole
+    var b = { sets: {} }; b.sets[setEditing] = { name: st.name, gids: ids }; post('/api/ui', b);
+  }
+  $('setPick').onchange = function () { post('/api/ui', { activeSet: this.value }); };
+  $('libOn').onchange = function () { post('/api/ui', { library: this.checked }); };
+  $('setNew').onclick = function () {
+    var n = 1, id; do { id = 'set' + (n++); } while (setsObj()[id]);
+    var defs = (S.templates && S.templates.graphics) || {}, vis = (S.ui && S.ui.visible) || {};
+    setEditing = id;
+    saveSet(id, { name: 'New set', gids: Object.keys(vis).filter(function (g) { return vis[g] && defs[g]; }) }).then(function () { post('/api/ui', { activeSet: id }); });
+  };
+  $('setEdit').onclick = function () {
+    var a = (S.ui && S.ui.activeSet) || '';
+    if (!a) { toast('Pick a set first, or click New set'); return; }
+    setEditing = setEditing ? '' : a; renderSets(); renderTakes();
+  };
+  $('setDone').onclick = function () { setEditing = ''; renderSets(); renderTakes(); };
+  $('setName').oninput = debounce(function () { var st = setsObj()[setEditing]; if (st) saveSet(setEditing, { name: $('setName').value || 'Set', gids: st.gids || [] }); }, 300);
+  $('setStyles').onclick = function () { post('/api/ui', { styleSetsReset: true }).then(function () { toast('Style sets rebuilt'); }); };
+  $('setDel').onclick = function () {
+    var a = (S.ui && S.ui.activeSet) || ''; if (!a) return;
+    var b = { sets: {}, activeSet: '' }; b.sets[a] = null; setEditing = ''; post('/api/ui', b);
+  };
+
+  // ------------------------------------------------------------ presets
+  var LAYOUTS = {
+    title: { label: 'Title card', f: ['kicker', 'title', 'sub', 'photo', 'logo'] },
+    list: { label: 'List', f: ['title', 'sub', 'text', 'foot', 'logo'], hint: 'label | value' },
+    two: { label: 'Two-column stats', f: ['title', 'sub', 'col1', 'col2', 'text', 'foot', 'photo', 'logo'], hint: 'label | value 1 | value 2' },
+    photo: { label: 'Photo + text (social)', f: ['kicker', 'title', 'sub', 'photo', 'logo'] },
+    quote: { label: 'Quote', f: ['title', 'kicker', 'sub', 'photo'], labels: { title: 'Name', kicker: 'Role', sub: 'Quote' } },
+    countdown: { label: 'Countdown / clock (full)', f: ['title', 'sub', 'mode', 'time', 'dur', 'done', 'photo'] },
+    clockbug: { label: 'Clock bug (corner)', f: ['title', 'mode', 'time', 'dur', 'done'] },
+    carousel: { label: 'Promo carousel', f: ['title', 'interval', 'text'], hint: 'image or clip link | caption (Upload adds a line)', upText: 'photos' },
+    lower: { label: 'Lower third', f: ['title', 'sub', 'photo', 'logo', 'text', 'autoHide'], hint: 'optional list for Next: name | detail' },
+    anthem: { label: 'Anthem (waving flag)', f: ['title', 'sub', 'photo', 'autoHide'], labels: { title: 'Singer', sub: 'Line under the name' } },
+    bug: { label: 'Status bug', f: ['title', 'sub', 'autoHide'] },
+    keys: { label: 'Keys to the game', f: ['title', 'sub', 'text'], hint: 'away key | home key' },
+    trivia: { label: 'Trivia', f: ['title', 'sub', 'foot', 'reveal'], labels: { sub: 'Question', foot: 'Answer' } },
+    next: { label: 'Next game', f: ['title', 'sub', 'logo', 'text', 'qr', 'foot'], labels: { sub: 'Date and time', logo: 'Opponent logo', foot: 'QR call to action' }, hint: 'away starter | home starter' },
+    open: { label: 'Segment open', f: ['kicker', 'title', 'sub', 'photo', 'autoHide'] },
+    video: { label: 'Video frame', f: ['title', 'video'] }
+  };
+  var FIELD_LABEL = { name: 'Button name', title: 'Title', kicker: 'Kicker', sub: 'Subtitle', text: 'Lines', foot: 'Footer', photo: 'Photo', logo: 'Logo', video: 'Video clip',
+    qr: 'QR link', time: 'Count down to (e.g. 6:35 PM)', mode: 'Clock', dur: 'Minutes (Back in ...)', done: 'Text at zero', interval: 'Seconds per slide',
+    col1: 'Column 1 label', col2: 'Column 2 label', autoHide: 'Auto out (seconds, blank = stays)', reveal: 'Show the answer' };
+  var curPreset = null;
+  function presets() { return (S.ui && S.ui.presets) || {}; }
+  Object.keys(LAYOUTS).forEach(function (k) { var o = document.createElement('option'); o.value = k; o.textContent = LAYOUTS[k].label; $('pfNewLayout').appendChild(o); });
+  function savePreset(id, patch) { var b = { presets: {} }; b.presets[id] = patch; return post('/api/ui', b); }
+  var sendPreset = debounce(function (id, k, v) { var p = {}; p[k] = v; savePreset(id, p); }, 300);
+  function renderPresetPick() {
+    var pr = presets(), sel = $('pfPick'), ids = Object.keys(pr).sort(function (a, b) { return String(pr[a].name || a).localeCompare(String(pr[b].name || b)); });
+    var key = ids.map(function (i) { return i + ':' + (pr[i].name || ''); }).join();
+    if (sel._key !== key) {
+      sel.innerHTML = '';
+      ids.forEach(function (i) { var o = document.createElement('option'); o.value = i; o.textContent = (pr[i].name || i) + '  (' + ((LAYOUTS[pr[i].layout] || {}).label || pr[i].layout) + ')'; sel.appendChild(o); });
+      sel._key = key;
+    }
+    if (!curPreset || !pr[curPreset]) curPreset = ids[0] || null;
+    if (curPreset) sel.value = curPreset;
+    renderPresetForm();
+  }
+  function renderPresetForm() {
+    var box = $('pfForm'), pr = presets(), p = curPreset && pr[curPreset];
+    if (!p) { box.innerHTML = '<div class="hint full">No presets yet: pick a layout and click New.</div>'; box._for = null; return; }
+    var lay = LAYOUTS[p.layout] || { f: ['title', 'sub'] };
+    var sig = curPreset + '|' + p.layout;
+    if (box._for !== sig) {
+      box.innerHTML = '';
+      ['name'].concat(lay.f).forEach(function (k) {
+        var wrap = document.createElement('div');
+        var full = ['text', 'sub', 'title', 'photo', 'logo', 'video', 'qr', 'name'].indexOf(k) >= 0;
+        if (full) wrap.className = 'full';
+        var lab = document.createElement('label');
+        lab.textContent = (lay.labels && lay.labels[k]) || FIELD_LABEL[k] || k;
+        if (k === 'text' && lay.hint) lab.textContent += ' (' + lay.hint + ')';
+        wrap.appendChild(lab);
+        var inp;
+        if (k === 'text' || (k === 'sub' && (p.layout === 'quote' || p.layout === 'trivia' || p.layout === 'photo'))) { inp = document.createElement('textarea'); inp.rows = k === 'text' ? 5 : 3; }
+        else if (k === 'mode') {
+          inp = document.createElement('select');
+          [['to', 'Count down to a time'], ['dur', 'Count down minutes from when taken'], ['up', 'Count up from when taken']].forEach(function (o) {
+            var op = document.createElement('option'); op.value = o[0]; op.textContent = o[1]; inp.appendChild(op);
+          });
+        } else if (k === 'reveal') { inp = document.createElement('input'); inp.type = 'checkbox'; }
+        else { inp = document.createElement('input'); inp.type = 'text'; }
+        inp.dataset.k = k;
+        inp.oninput = inp.onchange = function () {
+          var v = inp.type === 'checkbox' ? inp.checked : inp.value;
+          if (k === 'interval' || k === 'dur') v = v === '' ? '' : Number(v);
+          sendPreset(curPreset, k, v);
+        };
+        if (['photo', 'logo', 'video'].indexOf(k) >= 0) {
+          var row = document.createElement('div'); row.className = 'row';
+          var bt = document.createElement('button'); bt.textContent = 'Upload';
+          bt.onclick = function () {
+            upload(k === 'video' ? 'videos' : (k === 'logo' ? 'logos' : 'photos'), 'preset-' + curPreset + '-' + k, function (url) { inp.value = url; savePreset(curPreset, (function () { var o = {}; o[k] = url; return o; })()); });
+          };
+          row.appendChild(inp); row.appendChild(bt); wrap.appendChild(row);
+        } else wrap.appendChild(inp);
+        if (k === 'text' && lay.upText) {
+          var bt2 = document.createElement('button'); bt2.textContent = 'Upload image / clip';
+          bt2.onclick = function () {
+            upload('photos', 'promo-' + curPreset + '-' + Date.now().toString(36), function (url) { inp.value = (inp.value ? inp.value.replace(/\s*$/, '') + '\n' : '') + url + ' | '; sendPreset(curPreset, 'text', inp.value); });
+          };
+          wrap.appendChild(bt2);
+        }
+        box.appendChild(wrap);
+      });
+      box._for = sig;
+    }
+    box.querySelectorAll('[data-k]').forEach(function (inp) {
+      if (document.activeElement === inp) return;
+      var v = p[inp.dataset.k];
+      if (inp.type === 'checkbox') inp.checked = !!v; else inp.value = v == null ? (inp.dataset.k === 'mode' ? 'to' : '') : v;
+    });
+    var on = !!((S.ui && S.ui.visible) || {})['p_' + curPreset];
+    $('pfTake').classList.toggle('on', on);
+    $('pfTake').textContent = on ? 'ON AIR: take off' : 'Take on air';
+    var hasLines = (lay.f || []).indexOf('text') >= 0;
+    $('pfPrev').style.display = $('pfNext').style.display = hasLines && p.layout !== 'carousel' ? '' : 'none';
+    $('pfReveal').style.display = p.layout === 'trivia' ? '' : 'none';
+    $('pfClock').style.display = (p.layout === 'countdown' || p.layout === 'clockbug') && p.mode !== 'to' && p.mode ? '' : 'none';
+  }
+  $('pfPick').onchange = function () { curPreset = this.value; renderPresetForm(); };
+  function newId(base) { var id = String(base || 'preset').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 24) || 'preset', n = 1, out = id; while (presets()[out]) out = id + '_' + (++n); return out; }
+  $('pfNew').onclick = function () {
+    var lay = $('pfNewLayout').value, id = newId(lay);
+    curPreset = id;
+    savePreset(id, { layout: lay, name: 'New ' + LAYOUTS[lay].label, title: 'Title' });
+  };
+  $('pfCopy').onclick = function () {
+    var p = presets()[curPreset]; if (!p) return;
+    var id = newId(curPreset), c = JSON.parse(JSON.stringify(p)); c.name = (p.name || curPreset) + ' copy'; delete c.since;
+    curPreset = id; savePreset(id, c);
+  };
+  $('pfDel').onclick = function () {
+    if (!curPreset) return;
+    var gid = 'p_' + curPreset, b = { presets: {} }; b.presets[curPreset] = null;
+    if (((S.ui && S.ui.visible) || {})[gid]) post('/api/toggle', { g: gid, on: false });
+    curPreset = null; post('/api/ui', b);
+  };
+  $('pfTake').onclick = function () { if (curPreset) post('/api/toggle', { g: 'p_' + curPreset }); };
+  $('pfNext').onclick = function () { var p = presets()[curPreset]; if (p) savePreset(curPreset, { index: (Number(p.index) || 0) + 1 }); };
+  $('pfPrev').onclick = function () { var p = presets()[curPreset]; if (p) savePreset(curPreset, { index: (Number(p.index) || 0) - 1 }); };
+  $('pfReveal').onclick = function () { var p = presets()[curPreset]; if (p) savePreset(curPreset, { reveal: !p.reveal }); };
+  $('pfClock').onclick = function () { if (curPreset) savePreset(curPreset, { since: Date.now() }); };
+
+  var sendUmps = debounce(function () { post('/api/ui', { umpires: $('umpText').value }); }, 400);
+  $('umpText').oninput = sendUmps;
+  SHOW_FIELDS.forEach(function (p) { $(p[0]).oninput = sendShow; });
+  $('sLive').onchange = sendShow;
+  $('sBpTake').onclick = function () { post('/api/toggle', { g: 'bp_info' }); };
+  $('sLbTake').onclick = function () { post('/api/toggle', { g: 'league_bug' }); };
+  $('sPromoUp').onclick = function () {
+    upload('backgrounds', 'promo-' + Date.now().toString(36), function (url) { $('sPromoImg').value = url; sendShow(); });
+  };
+  $('trigOn').onchange = function () { post('/api/ui', { triggers: { enabled: this.checked } }); };
+  function renderNotes() {
+    var n = (S.ui && S.ui.notes) || {}, s = (S.ui && S.ui.show) || {};
+    NOTE_FIELDS.forEach(function (p) { if (document.activeElement !== $(p[0])) $(p[0]).value = n[p[1]] || ''; });
+    SHOW_FIELDS.forEach(function (p) { if (document.activeElement !== $(p[0])) $(p[0]).value = s[p[1]] || ''; });
+    var sp = (S.ui && S.ui.split) || {};
+    SPLIT_FIELDS.forEach(function (p) { if (document.activeElement !== $(p[0])) $(p[0]).value = sp[p[1]] || ''; });
+    Object.keys(LIST_FIELDS).forEach(function (key) {
+      var v = (S.ui && S.ui[key]) || {};
+      LIST_FIELDS[key].forEach(function (p) { if (document.activeElement !== $(p[0])) $(p[0]).value = v[p[1]] || ''; });
+    });
+    renderPresetPick();
+    if (document.activeElement !== $('umpText')) $('umpText').value = (S.ui && S.ui.umpires) || '';
+    $('sLive').checked = s.live !== false;
+    $('trigOn').checked = !((S.ui && S.ui.triggers) || {}).hasOwnProperty('enabled') || !!S.ui.triggers.enabled;
+  }
+  var sendCustom = debounce(function () { post('/api/ui', { custom: { line1: $('c1').value, line2: $('c2').value, line3: $('c3').value } }); }, 250);
+  ['c1', 'c2', 'c3'].forEach(function (id) { $(id).oninput = sendCustom; });
+  function renderCustom() {
+    var c = (S.ui && S.ui.custom) || {};
+    [['c1', 'line1'], ['c2', 'line2'], ['c3', 'line3']].forEach(function (p) { if (document.activeElement !== $(p[0])) $(p[0]).value = c[p[1]] || ''; });
+  }
+
+  // ----------------------------------------------------------- source
+  function renderSource() {}
+  function srcVis() { $('manNote').textContent = ''; }
+  // ------------------------------------------------------------ panels (Scoring / Graphics / Custom docks)
+  var PANEL = new URLSearchParams(location.search).get('panel') || '';
+  Array.prototype.forEach.call(document.querySelectorAll('[data-panel]'), function (c) {
+    if (PANEL && c.dataset.panel.split(' ').indexOf(PANEL) < 0) c.style.display = 'none';
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('#nav a'), function (a) { a.classList.toggle('sel', a.dataset.p === PANEL); });
+  if (PANEL) document.title = 'Graphics: ' + PANEL.charAt(0).toUpperCase() + PANEL.slice(1);
+
+  // ------------------------------------------------------------ uploads (logos / backgrounds)
+  var upCb = null;
+  function upload(kind, name, cb) { upCb = { kind: kind, name: name, cb: cb }; $('upFile').value = ''; $('upFile').click(); }
+  $('upFile').onchange = function () {
+    var f = this.files && this.files[0];
+    if (!f || !upCb) return;
+    var rd = new FileReader();
+    rd.onload = function () {
+      post('/api/media/upload', { kind: upCb.kind, name: upCb.name, filename: f.name, data: rd.result }).then(function (r) {
+        if (r && r.url) { upCb.cb(r.url); toast('Uploaded'); } else toast((r && r.error) || 'Upload failed');
+      });
+    };
+    rd.readAsDataURL(f);
+  };
+  Array.prototype.forEach.call(document.querySelectorAll('[data-up]'), function (b) {
+    b.onclick = function () { upload('logos', b.dataset.name, function (url) { $(b.dataset.up).value = url; sendLogos(); }); };
+  });
+  var sendLogos = debounce(function () {
+    post('/api/ui', { league: { name: $('lgName').value, logo: $('lgLogo').value }, brand: { name: $('brName').value, short: $('brShort').value, logo: $('brLogo').value, color: $('brColor').value, color2: $('brColor2').value } });
+  }, 250);
+  ['lgName', 'lgLogo', 'brName', 'brShort', 'brLogo', 'brColor', 'brColor2'].forEach(function (id) { $(id).oninput = sendLogos; });
+
+  // ------------------------------------------------------------ player picker
+  function pick() { return (S.ui && S.ui.pick) || { on: false, side: 'home', id: '' }; }
+  function setPick(p) { post('/api/ui', { pick: p }); }
+  $('pkAway').onclick = function () { setPick({ side: 'away' }); };
+  $('pkHome').onclick = function () { setPick({ side: 'home' }); };
+  $('pkOn').onchange = function () { setPick({ on: this.checked }); };
+  $('pkFilter').oninput = function () { renderPicker(true); };
+  function renderPicker(force) {
+    var pk = pick(), g = S.game || {};
+    $('pkAway').textContent = (g.away && g.away.abbr) || 'AWAY';
+    $('pkHome').textContent = (g.home && g.home.abbr) || 'HOME';
+    $('pkAway').classList.toggle('btn-primary', pk.side === 'away');
+    $('pkHome').classList.toggle('btn-primary', pk.side !== 'away');
+    $('pkOn').checked = !!pk.on;
+    var t = g[pk.side === 'away' ? 'away' : 'home'] || {};
+    var seen = {}, rows = [];
+    (t.lineup || []).concat(t.pitchers || [], t.roster || []).forEach(function (p) {
+      var k = String(p.id || p.name || '').toLowerCase();
+      if (!p.name || seen[k]) return; seen[k] = 1; rows.push(p);
+    });
+    var q = $('pkFilter').value.trim().toLowerCase();
+    if (q) rows = rows.filter(function (p) { return (p.name + ' ' + (p.number || '')).toLowerCase().indexOf(q) >= 0; });
+    var L = $('pkList');
+    var sig = JSON.stringify([pk.id, pk.side, rows.map(function (p) { return p.id || p.name; })]);
+    if (!force && L._sig === sig) return;
+    L._sig = sig;
+    L.innerHTML = rows.length ? '' : '<div class="hint">No roster for this team yet.</div>';
+    rows.forEach(function (p) {
+      var b = document.createElement('button');
+      b.textContent = (p.number ? '#' + p.number + '  ' : '') + p.name + (p.pos ? '  ' + p.pos : '');
+      if (String(p.id || p.name).toLowerCase() === String(pk.id || '').toLowerCase()) b.className = 'sel';
+      b.onclick = function () { setPick({ id: p.id || p.name, on: true }); };
+      L.appendChild(b);
+    });
+    var T = $('pkTakes'), defs = (S.templates && S.templates.graphics) || {}, vis = (S.ui && S.ui.visible) || {};
+    var ids = Object.keys(defs).filter(function (k) { return defs[k].pickable; });
+    if (T._keys !== ids.join()) {
+      T._keys = ids.join(); T.innerHTML = '';
+      ids.forEach(function (gid) {
+        var c = document.createElement('div'); c.className = 'take'; c.dataset.g = gid;
+        c.innerHTML = '<button class="go"><span class="nm"></span></button>';
+        c.querySelector('.nm').textContent = defs[gid].name || gid;
+        c.querySelector('.go').onclick = function () { post('/api/toggle', { g: gid }); };
+        T.appendChild(c);
+      });
+    }
+    T.querySelectorAll('.take').forEach(function (c) { c.classList.toggle('on', !!vis[c.dataset.g]); });
+  }
+
+  // ------------------------------------------------------------ ticker
+  var sendTicker = debounce(function () {
+    post('/api/ui', { ticker: { label: $('tkLabel').value, speed: Number($('tkSpeed').value) || 110, scores: $('tkScores').checked,
+      standings: $('tkStand').checked, tidbits: $('tkText').value } });
+  }, 300);
+  ['tkLabel', 'tkSpeed', 'tkText'].forEach(function (id) { $(id).oninput = sendTicker; });
+  ['tkScores', 'tkStand'].forEach(function (id) { $(id).onchange = sendTicker; });
+  $('tkTake').onclick = function () { post('/api/toggle', { g: 'ticker' }); };
+  function renderCustomPanel() {
+    var tk = (S.ui && S.ui.ticker) || {}, lg = (S.ui && S.ui.league) || {}, br = (S.ui && S.ui.brand) || {};
+    [['tkLabel', tk.label], ['tkSpeed', tk.speed || 110], ['tkText', tk.tidbits], ['lgName', lg.name], ['lgLogo', lg.logo], ['brName', br.name], ['brShort', br.short], ['brLogo', br.logo], ['brColor', br.color || '#0A2240'], ['brColor2', br.color2 || '#F5821F']]
+      .forEach(function (p) { if (document.activeElement !== $(p[0])) $(p[0]).value = p[1] == null ? '' : p[1]; });
+    $('tkScores').checked = tk.scores !== false; $('tkStand').checked = tk.standings !== false;
+    $('tkTake').classList.toggle('btn-primary', !((S.ui && S.ui.visible) || {}).ticker);
+    renderPicker();
+  }
+
+  var RP = { info: { active: false }, steps: [] };
+  function rpLoadSteps() {}
+  function rpRender() {}
+  $('bRefresh').onclick = function () { post('/api/refresh', {}); toast('Refreshing'); };
+  $('bEditor').onclick = function () { window.open('/editor.html', '_blank'); };
+  $('bAdobe').onclick = function () { window.open('/adobe.html', '_blank'); };
+
+  // ------------------------------------------------------------ teams
+  function renderTeams() {
+    var box = $('teamsBox');
+    if (box._init || !S.config) return;
+    box._init = true;
+    ['away', 'home'].forEach(function (side) {
+      var t = S.config.teams[side] || {};
+      var d = document.createElement('div');
+      d.innerHTML = '<label style="color:var(--text)">' + side.toUpperCase() + '</label>' +
+        '<div class="row" style="margin-bottom:6px"><input type="color" data-k="color"><input type="color" data-k="color2"><span class="hint" style="margin:0">primary / secondary</span></div>' +
+        '<input type="text" data-k="abbr" placeholder="Abbreviation override" style="margin-bottom:6px">' +
+        '<input type="text" data-k="name" placeholder="Name override" style="margin-bottom:6px">' +
+        '<div class="row" style="margin-bottom:6px"><input type="text" data-k="logo" placeholder="Logo: URL or upload"><button data-tu="logo">Upload</button></div>' +
+        '<div class="row"><input type="text" data-k="bg" placeholder="Background: URL or upload (Matchup)"><button data-tu="bg">Upload</button></div>';
+      d.querySelectorAll('[data-k]').forEach(function (inp) {
+        inp.value = t[inp.dataset.k] || (inp.type === 'color' ? '#333333' : '');
+        inp.oninput = debounce(function () { var p = { teams: {} }; p.teams[side] = {}; p.teams[side][inp.dataset.k] = inp.value; post('/api/config', p); }, 300);
+      });
+      d.querySelectorAll('[data-tu]').forEach(function (b) {
+        b.onclick = function () {
+          var k = b.dataset.tu, tm = (S.game && S.game[side]) || {};
+          upload(k === 'bg' ? 'backgrounds' : 'logos', (tm.abbr || side) + (k === 'bg' ? '' : ''), function (url) {
+            var inp = d.querySelector('[data-k="' + k + '"]'); inp.value = url;
+            var p = { teams: {} }; p.teams[side] = {}; p.teams[side][k] = url; post('/api/config', p);
+          });
+        };
+      });
+      box.appendChild(d);
+    });
+    var h = document.createElement('div');
+    h.className = 'hint full';
+    h.textContent = 'Team colors feed every team-colored element. Logos, player photos and backgrounds can also be dropped into the media folder (see media/README.txt). Overrides apply to all sources.';
+    box.appendChild(h);
+  }
+
+  // ----------------------------------------------------------- manual
+  function man() { return (S.ui && S.ui.manual) || {}; }
+  function sendManual(patch) { post('/api/ui', { manual: patch }); }
+  function renderManual() {
+    var m = man();
+    var g = $('mgrid');
+    if (!g._init) {
+      g._init = true;
+      g.innerHTML = '<span></span><span class="lab">Runs</span><span class="lab">Hits</span><span class="lab">Errors</span>';
+      ['away', 'home'].forEach(function (side) {
+        var n = document.createElement('input');
+        n.type = 'text'; n.dataset.m = side + '.abbr'; n.placeholder = side.toUpperCase();
+        g.appendChild(n);
+        ['runs', 'hits', 'errors'].forEach(function (k) {
+          var st = document.createElement('div');
+          st.className = 'stepper';
+          st.innerHTML = '<button>-</button><b data-v="' + side + '.' + k + '">0</b><button>+</button>';
+          var bs = st.querySelectorAll('button');
+          bs[0].onclick = function () { bump(side, k, -1); };
+          bs[1].onclick = function () { bump(side, k, 1); };
+          g.appendChild(st);
+        });
+      });
+      bindInputs();
+    }
+    document.querySelectorAll('[data-v]').forEach(function (b) { b.textContent = getPath(m, b.dataset.v) || 0; });
+    $('mInn').textContent = m.inning || 1;
+    $('mHalf').textContent = (m.half || 'top') === 'top' ? 'TOP' : 'BOT';
+    $('mStatus').value = m.status || 'LIVE';
+    var c = $('mCount');
+    c.innerHTML = '';
+    [['balls', 4, 'Balls'], ['strikes', 3, 'Strikes'], ['outs', 3, 'Outs']].forEach(function (x) {
+      var grp = document.createElement('div');
+      grp.className = 'grp';
+      grp.innerHTML = '<span>' + x[2] + '</span>';
+      for (var i = 1; i < x[1]; i++) {
+        (function (i) {
+          var b = document.createElement('button');
+          b.className = 'pip' + ((m[x[0]] || 0) >= i ? ' on' : '');
+          b.textContent = i;
+          b.onclick = function () { var p = {}; p[x[0]] = (m[x[0]] || 0) === i ? i - 1 : i; sendManual(p); };
+          grp.appendChild(b);
+        })(i);
+      }
+      c.appendChild(grp);
+    });
+    document.querySelectorAll('[data-b]').forEach(function (b) { b.classList.toggle('on', !!(m.bases || {})[b.dataset.b]); });
+    document.querySelectorAll('[data-m]').forEach(function (inp) { if (document.activeElement !== inp) { var v = getPath(m, inp.dataset.m); inp.value = v == null ? '' : v; } });
+  }
+  function bump(side, k, d) {
+    var m = man();
+    var v = Math.max(0, ((m[side] || {})[k] || 0) + d);
+    var p = {}; p[side] = {}; p[side][k] = v;
+    if (k === 'runs') {
+      // Keep the linescore in step: credit the run to the current inning.
+      var ls = JSON.parse(JSON.stringify(m.linescore || { away: [], home: [] }));
+      var row = ls[side] = ls[side] || [];
+      var idx = (m.inning || 1) - 1;
+      while (row.length <= idx) row.push(row.length < idx ? 0 : 0);
+      row[idx] = Math.max(0, (Number(row[idx]) || 0) + d);
+      p.linescore = ls;
+    }
+    sendManual(p);
+  }
+  function bindInputs() {
+    document.querySelectorAll('[data-m]').forEach(function (inp) {
+      inp.oninput = debounce(function () { var p = {}; setPath(p, inp.dataset.m, inp.value); sendManual(p); }, 300);
+    });
+  }
+  document.querySelectorAll('[data-inn]').forEach(function (b) {
+    b.onclick = function () { sendManual({ inning: Math.max(1, (man().inning || 1) + Number(b.dataset.inn)) }); };
+  });
+  $('mHalf').onclick = function () {
+    var m = man(), top = (m.half || 'top') === 'top';
+    var p = { half: top ? 'bottom' : 'top', balls: 0, strikes: 0, outs: 0, bases: { '1': false, '2': false, '3': false } };
+    if (!top) p.inning = (m.inning || 1) + 1;
+    sendManual(p);
+  };
+  $('mStatus').onchange = function () { sendManual({ status: $('mStatus').value }); };
+  document.querySelectorAll('[data-b]').forEach(function (b) {
+    b.onclick = function () { var p = { bases: {} }; p.bases[b.dataset.b] = !((man().bases || {})[b.dataset.b]); sendManual(p); };
+  });
+  $('mClearCount').onclick = function () { sendManual({ balls: 0, strikes: 0 }); };
+  $('mClearBases').onclick = function () { sendManual({ bases: { '1': false, '2': false, '3': false } }); };
+
+  // ------------------------------------------------------------- urls
+  function renderUrls() {
+    var box = $('urls');
+    var defs = (S.templates && S.templates.graphics) || {};
+    var o = location.origin;
+    box.innerHTML = '<div class="hint" style="margin-top:0">Click to copy. Browser source size 1920 x 1080. The OBS script button "Create / Update Graphics Scene" adds these for you.</div>';
+    [['full', 'Full Screen'], ['panel', 'Side Panels'], ['lower', 'Lower Thirds'], ['ticker', 'Ticker'], ['bug', 'Scorebugs'], ['event', 'Event Stingers'], ['stinger', 'Transitions']].forEach(function (l) {
+      var c = document.createElement('code');
+      c.textContent = o + '/overlay.html?layer=' + l[0];
+      c.title = 'Layer source: ' + l[1] + ' (one OBS source per layer, bottom to top in this order)';
+      c.onclick = function () { navigator.clipboard && navigator.clipboard.writeText(c.textContent).then(function () { toast('Copied'); }); };
+      box.appendChild(c);
+    });
+    Object.keys(defs).concat(['all']).forEach(function (gid) {
+      var c = document.createElement('code');
+      c.textContent = o + '/overlay.html?g=' + gid;
+      c.title = gid === 'all' ? 'Every graphic in one source' : (defs[gid].name || gid);
+      c.onclick = function () { navigator.clipboard && navigator.clipboard.writeText(c.textContent).then(function () { toast('Copied'); }); };
+      box.appendChild(c);
+    });
+    var d = document.createElement('code');
+    d.textContent = o + '/control.html';
+    d.title = 'Control panel (Docks > Custom Browser Docks)';
+    box.appendChild(d);
+  }
+
+
+  // ---------------------------------------------------------- sponsors
+  function spState() { return (S.ui && S.ui.sponsors) || { library: [], slots: {} }; }
+  function spSlotsInUse() {
+    var defs = (S.templates && S.templates.graphics) || {}, out = {};
+    Object.keys(defs).forEach(function (g) { var sl = defs[g].sponsorSlot; if (sl) (out[sl] = out[sl] || []).push(defs[g].name || g); });
+    Object.keys(spState().slots || {}).forEach(function (sl) { out[sl] = out[sl] || []; });
+    // Expand rules like "half_{halfKey}, scorebug": literal names are slots, {token} names are families.
+    var flat = {};
+    Object.keys(out).forEach(function (spec) {
+      spec.split(',').forEach(function (part) {
+        part = part.trim();
+        if (!part || part.indexOf('{') >= 0 || SP_FAMILY_RE.test(part)) return;
+        flat[part] = (flat[part] || []).concat(out[spec] || []);
+      });
+    });
+    Object.keys(flat).forEach(function (k) { flat[k] = Array.from(new Set(flat[k])); });
+    return flat;
+  }
+  var SP_FAMILY_RE = /^(lineup_\d+|half_[TB](\d+|X))$/;
+  function spFamilyUsers(prefix) {
+    var defs = (S.templates && S.templates.graphics) || {}, out = [];
+    Object.keys(defs).forEach(function (g) {
+      var d = defs[g];
+      if (String(d.sponsorSlot || '').indexOf(prefix + '{') >= 0 || String(d.rowSponsors || '').indexOf(prefix + '{') >= 0) out.push(d.name || g);
+    });
+    return out;
+  }
+  function renderFamily(B, lib, sp, title, prefix, keys, labelFor, hint) {
+    var d = document.createElement('div');
+    d.className = 'sp-slot';
+    var users = spFamilyUsers(prefix);
+    d.innerHTML = '<h4><b></b><span class="now"></span></h4><div class="uses"></div>' +
+      '<div class="g3" style="margin-bottom:8px"><div><label>Label</label><input type="text" data-k="label" placeholder="Presented by"></div>' +
+      '<div style="display:flex;align-items:flex-end"><button data-k="clear" style="width:100%">Clear all</button></div></div><div class="famgrid"></div>' +
+      '<div class="hint"></div>';
+    d.querySelector('b').textContent = title;
+    d.querySelector('.uses').textContent = users.length ? 'Used by: ' + users.join(', ') : 'Not used by any graphic in this package';
+    d.querySelector('.hint').textContent = hint;
+    var first = keys.map(function (k) { return (sp.slots || {})[prefix + k]; }).filter(Boolean)[0] || {};
+    var lb = d.querySelector('[data-k=label]');
+    lb.value = first.label == null ? 'Presented by' : first.label;
+    lb.oninput = debounce(function () {
+      var p = { sponsors: { slots: {} } };
+      keys.forEach(function (k) { if ((sp.slots || {})[prefix + k]) p.sponsors.slots[prefix + k] = { label: lb.value }; });
+      post('/api/ui', p);
+    }, 400);
+    d.querySelector('[data-k=clear]').onclick = function () {
+      if (!confirm('Clear every ' + title.toLowerCase() + ' assignment?')) return;
+      var p = { sponsors: { slots: {} } };
+      keys.forEach(function (k) { p.sponsors.slots[prefix + k] = { enabled: false, ids: [] }; });
+      post('/api/ui', p);
+    };
+    var grid = d.querySelector('.famgrid');
+    grid.style.cssText = 'display:grid;grid-template-columns:auto 1fr' + (labelFor.cols === 2 ? ' 1fr' : '') + ';gap:6px 8px;align-items:center';
+    var opts = '<option value="">(none: uses fallback)</option>' + lib.map(function (it) {
+      return '<option value="' + GFX.esc(it.id) + '">' + GFX.esc(it.name || 'Unnamed') + (it.active === false ? ' (paused)' : '') + '</option>';
+    }).join('');
+    labelFor.rows.forEach(function (row) {
+      var l = document.createElement('span');
+      l.className = 'hint';
+      l.style.margin = '0';
+      l.textContent = row.label;
+      grid.appendChild(l);
+      row.keys.forEach(function (k) {
+        var sel = document.createElement('select');
+        sel.innerHTML = opts;
+        sel.title = row.titles ? row.titles[row.keys.indexOf(k)] : '';
+        var st = (sp.slots || {})[prefix + k] || {};
+        sel.value = st.enabled && st.ids && st.ids[0] ? st.ids[0] : '';
+        sel.onchange = function () {
+          spSaveSlot(prefix + k, { enabled: !!sel.value, ids: sel.value ? [sel.value] : [], label: lb.value, rotate: 0 });
+        };
+        grid.appendChild(sel);
+      });
+    });
+    d._now = d.querySelector('.now');
+    d._prefix = prefix;
+    B.appendChild(d);
+  }
+  function spId() { return 'sp' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); }
+  function spSaveLib(lib) { post('/api/ui', { sponsors: { library: lib } }); }
+  function spSaveSlot(slot, patch) { var p = { sponsors: { slots: {} } }; p.sponsors.slots[slot] = patch; post('/api/ui', p); }
+  var spSaveLibDeb = debounce(function () { spSaveLib(spCollectLib()); }, 400);
+  function spCollectLib() {
+    var lib = JSON.parse(JSON.stringify(spState().library || []));
+    document.querySelectorAll('#spLib .sp-row').forEach(function (r) {
+      var it = lib.find(function (x) { return x.id === r.dataset.id; });
+      if (!it) return;
+      it.name = r.querySelector('[data-k=name]').value;
+      it.logo = r.querySelector('[data-k=logo]').value.trim();
+      it.active = r.querySelector('[data-k=active]').checked;
+    });
+    return lib;
+  }
+  function spEditing() { var a = document.activeElement; return a && $('spCard').contains(a) && a.tagName === 'INPUT' && a.type !== 'checkbox'; }
+  function renderSponsors(force) {
+    var sp = spState();
+    var lib = sp.library || [];
+    var slots = spSlotsInUse();
+    var live = Object.keys(slots).filter(function (k) { return (sp.slots[k] || {}).enabled; }).length;
+    $('spNote').textContent = lib.length ? '(' + lib.length + ' sponsors, ' + live + ' slots on)' : '';
+    $('spLive').checked = sp.logOnlyWhenLive !== false;
+    if (spEditing() && !force) { spNow(); return; }
+    var L = $('spLib');
+    L.innerHTML = lib.length ? '' : '<div class="hint" style="margin:0">No sponsors yet.</div>';
+    lib.forEach(function (it) {
+      var r = document.createElement('div');
+      r.className = 'sp-row';
+      r.dataset.id = it.id;
+      r.innerHTML = '<div class="sp-thumb"></div><input type="text" data-k="name" placeholder="Sponsor name"><input type="text" data-k="logo" placeholder="Logo URL or /media/sponsors/file.png">' +
+        '<label class="row" title="Active" style="margin:0"><input type="checkbox" data-k="active" style="width:auto"></label><button class="del" title="Remove">&times;</button>';
+      r.querySelector('[data-k=name]').value = it.name || '';
+      r.querySelector('[data-k=logo]').value = it.logo || '';
+      r.querySelector('[data-k=active]').checked = it.active !== false;
+      var th = r.querySelector('.sp-thumb');
+      if (it.logo) { var im = document.createElement('img'); im.src = it.logo; im.onerror = function () { th.textContent = 'NO IMAGE'; }; th.appendChild(im); }
+      else th.textContent = (it.name || '?').slice(0, 10).toUpperCase();
+      r.querySelectorAll('input[type=text]').forEach(function (i) { i.oninput = spSaveLibDeb; });
+      r.querySelector('[data-k=active]').onchange = function () { spSaveLib(spCollectLib()); };
+      r.querySelector('.del').onclick = function () {
+        if (!confirm('Remove ' + (it.name || 'this sponsor') + ' from the library and every slot?')) return;
+        spSaveLib(spCollectLib().filter(function (x) { return x.id !== it.id; }));
+        var p = { sponsors: { slots: {} } };
+        Object.keys(sp.slots || {}).forEach(function (k) { p.sponsors.slots[k] = { ids: (sp.slots[k].ids || []).filter(function (i) { return i !== it.id; }) }; });
+        post('/api/ui', p);
+      };
+      L.appendChild(r);
+    });
+
+    var B = $('spSlots');
+    B.innerHTML = '';
+    Object.keys(slots).sort().forEach(function (slot) {
+      var st = (sp.slots || {})[slot] || {};
+      var d = document.createElement('div');
+      d.className = 'sp-slot';
+      d.innerHTML = '<h4><label class="row" style="margin:0;text-transform:none;letter-spacing:0;color:var(--text);font-size:13px"><input type="checkbox" data-k="enabled" style="width:auto"> <b></b></label><span class="now" data-now="' + slot + '"></span></h4>' +
+        '<div class="uses"></div>' +
+        '<div class="g3"><div><label>Label</label><input type="text" data-k="label" placeholder="Presented by"></div>' +
+        '<div><label>Rotate every (sec)</label><input type="number" data-k="rotate" min="0" step="1" placeholder="30"></div>' +
+        '<div style="display:flex;align-items:flex-end"><button data-k="copy" title="Copy this slot\'s sponsors, label and rotation to every slot" style="width:100%">Copy to all slots</button></div></div>' +
+        '<div class="chips"></div>';
+      d.querySelector('b').textContent = slot;
+      d.querySelector('.uses').textContent = slots[slot].length ? 'Used by: ' + slots[slot].join(', ') : 'Not used by any graphic in this package';
+      var en = d.querySelector('[data-k=enabled]');
+      en.checked = !!st.enabled;
+      en.onchange = function () { spSaveSlot(slot, { enabled: en.checked }); };
+      var lb = d.querySelector('[data-k=label]');
+      lb.value = st.label == null ? 'Presented by' : st.label;
+      lb.oninput = debounce(function () { spSaveSlot(slot, { label: lb.value }); }, 400);
+      if (st.label == null) spSaveSlot(slot, { label: 'Presented by', rotate: 30 });
+      var ro = d.querySelector('[data-k=rotate]');
+      ro.value = st.rotate == null ? 30 : st.rotate;
+      ro.oninput = debounce(function () { spSaveSlot(slot, { rotate: Math.max(0, Number(ro.value) || 0) }); }, 400);
+      d.querySelector('[data-k=copy]').onclick = function () {
+        var p = { sponsors: { slots: {} } };
+        Object.keys(slots).forEach(function (k) { p.sponsors.slots[k] = { enabled: !!st.enabled, ids: (st.ids || []).slice(), label: lb.value, rotate: Number(ro.value) || 0 }; });
+        post('/api/ui', p).then(function () { toast('Copied to all slots'); });
+      };
+      var ch = d.querySelector('.chips');
+      if (!lib.length) ch.innerHTML = '<span class="hint" style="margin:0">Add sponsors to the library first.</span>';
+      lib.forEach(function (it) {
+        var c = document.createElement('span');
+        var on = (st.ids || []).indexOf(it.id) >= 0;
+        c.className = 'chip' + (on ? ' on' : '');
+        c.textContent = (it.name || 'Unnamed') + (it.active === false ? ' (paused)' : '');
+        c.onclick = function () {
+          var ids = (st.ids || []).slice();
+          var i = ids.indexOf(it.id);
+          if (i >= 0) ids.splice(i, 1); else ids.push(it.id);
+          spSaveSlot(slot, { ids: ids, enabled: ids.length ? (st.enabled || !st.ids || !st.ids.length) : st.enabled });
+        };
+        ch.appendChild(c);
+      });
+      B.appendChild(d);
+    });
+    var spots = [];
+    for (var i = 1; i <= 9; i++) spots.push(String(i));
+    renderFamily(B, lib, sp, 'Lineup spots', 'lineup_', spots,
+      { cols: 1, rows: spots.map(function (k) { return { label: 'Spot ' + k, keys: [k] }; }) },
+      'Each spot in the batting order gets its own sponsor. Batter graphics show the current hitter\'s spot; the Lineup graphic shows every spot\'s logo. Unassigned spots fall back to the graphic\'s own slot.');
+    var inns = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'X'];
+    var hk = [];
+    inns.forEach(function (n) { hk.push('T' + n, 'B' + n); });
+    renderFamily(B, lib, sp, 'Half innings', 'half_', hk,
+      { cols: 2, rows: inns.map(function (n) { return { label: n === 'X' ? 'Extras' : 'Inning ' + n, keys: ['T' + n, 'B' + n], titles: ['Top ' + n, 'Bottom ' + n] }; }) },
+      'Left column = top, right column = bottom. During a break the next half\'s sponsor shows. The scorebugs, Due Up and the Inning Sponsor graphic use these; unassigned halves fall back to the graphic\'s own slot.');
+    spNow();
+  }
+  function spNow() {
+    document.querySelectorAll('#spSlots .sp-slot').forEach(function (d) {
+      if (!d._prefix || !S.game) return;
+      var key = d._prefix === 'half_' ? S.game.halfKey : (S.game.batter && S.game.batter.slot);
+      var r = key ? GFX.sponsorFor(S.ui, d._prefix + key) : { on: false };
+      d._now.textContent = key ? 'Now: ' + (d._prefix === 'half_' ? S.game.nextHalfLabel : 'spot ' + key) + ' = ' + (r.on ? r.name : 'none') : '';
+    });
+    document.querySelectorAll('[data-now]').forEach(function (n) {
+      var r = GFX.sponsorFor(S.ui, n.dataset.now);
+      var st = ((spState().slots || {})[n.dataset.now]) || {};
+      n.textContent = r.on ? 'Now: ' + (r.name || 'logo') + ((st.ids || []).length > 1 && st.rotate ? ' (rotating)' : '') : 'Off';
+    });
+  }
+  setInterval(spNow, 1000);
+  $('spAdd').onclick = function () {
+    var lib = spCollectLib();
+    lib.push({ id: spId(), name: 'New Sponsor', logo: '', active: true });
+    spSaveLib(lib);
+  };
+  $('spUpload').onclick = function () { $('spFile').click(); };
+  $('spFile').onchange = function () {
+    var f = $('spFile').files[0];
+    if (!f) return;
+    var rd = new FileReader();
+    rd.onload = function () {
+      post('/api/sponsors/upload', { filename: f.name, data: rd.result }).then(function (r) {
+        if (!r.ok) return toast(r.error || 'Upload failed');
+        var lib = spCollectLib();
+        lib.push({ id: spId(), name: f.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' '), logo: r.url, active: true });
+        spSaveLib(lib);
+        toast('Logo added');
+      });
+    };
+    rd.readAsDataURL(f);
+    $('spFile').value = '';
+  };
+  function spLoadMedia() {
+    GFX.api('/api/media').then(function (m) {
+      var sel = $('spMedia');
+      sel.innerHTML = '<option value="">Add from media/sponsors...</option>';
+      var used = (spState().library || []).map(function (x) { return x.logo; });
+      Object.keys(m.sponsors || {}).forEach(function (k) {
+        if (used.indexOf(m.sponsors[k]) >= 0) return;
+        var o = document.createElement('option');
+        o.value = m.sponsors[k];
+        o.textContent = k;
+        sel.appendChild(o);
+      });
+    });
+  }
+  $('spMedia').onfocus = spLoadMedia;
+  $('spMedia').onchange = function () {
+    var url = $('spMedia').value;
+    if (!url) return;
+    var lib = spCollectLib();
+    var nm = decodeURIComponent(url.split('/').pop()).replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ');
+    lib.push({ id: spId(), name: nm.replace(/\b\w/g, function (c) { return c.toUpperCase(); }), logo: url, active: true });
+    spSaveLib(lib);
+    $('spMedia').value = '';
+  };
+  $('spLive').onchange = function () { post('/api/ui', { sponsors: { logOnlyWhenLive: $('spLive').checked } }); };
+  function fmtDur(sec) { sec = Math.round(sec || 0); var h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s).padStart(2, '0'); }
+  function spReport() {
+    if (!$('spCard').open) return;
+    GFX.api('/api/sponsors/log').then(function (d) {
+      var days = Object.keys(d.days || {}).sort().reverse();
+      var sel = $('spDay'), cur = sel.value;
+      sel.innerHTML = '<option value="__all">All days</option>' + days.map(function (x) { return '<option>' + x + '</option>'; }).join('');
+      sel.value = cur && (cur === '__all' || days.indexOf(cur) >= 0) ? cur : (days[0] || '__all');
+      var pick = sel.value === '__all' ? days : [sel.value];
+      var agg = {};
+      pick.forEach(function (day) {
+        var dd = d.days[day] || {};
+        Object.keys(dd).forEach(function (sid) {
+          var a = agg[sid] = agg[sid] || { name: dd[sid].name, seconds: 0, takes: 0, graphics: {} };
+          a.seconds += dd[sid].seconds; a.takes += dd[sid].takes;
+          Object.keys(dd[sid].graphics || {}).forEach(function (g) { a.graphics[g] = (a.graphics[g] || 0) + dd[sid].graphics[g].seconds; });
+        });
+      });
+      var defs = (S.templates && S.templates.graphics) || {};
+      var rows = Object.keys(agg).map(function (k) { return agg[k]; }).sort(function (a, b) { return b.seconds - a.seconds; });
+      $('spRep').innerHTML = '<tr><th>Sponsor</th><th class="n">On air</th><th class="n">Takes</th><th>Top graphics</th></tr>' +
+        (rows.length ? rows.map(function (r) {
+          var top = Object.keys(r.graphics).sort(function (a, b) { return r.graphics[b] - r.graphics[a]; }).slice(0, 3)
+            .map(function (g) { return ((defs[g] || {}).name || g) + ' ' + fmtDur(r.graphics[g]); }).join(', ');
+          return '<tr><td>' + GFX.esc(r.name || '') + '</td><td class="n">' + fmtDur(r.seconds) + '</td><td class="n">' + r.takes + '</td><td>' + GFX.esc(top) + '</td></tr>';
+        }).join('') : '<tr><td colspan="4" class="hint">Nothing logged yet.</td></tr>');
+    });
+  }
+  $('spDay').onchange = spReport;
+  $('spCard').addEventListener('toggle', function () { spReport(); spLoadMedia(); });
+  setInterval(spReport, 5000);
+  $('spReset').onclick = function () {
+    if (!confirm('Clear the sponsor exposure log? Download the CSV first if you need it.')) return;
+    post('/api/sponsors/log/reset', {}).then(spReport);
+  };
+
+  // ------------------------------------------------- players & headshots
+  var phSide = 'home', phSig = '', phTarget = null;
+  function phRoster(side) { return ((S.game && S.game[side]) || {}).roster || []; }
+  function renderPhotos(force) {
+    if (!S.game) return;
+    var tabs = $('phTabs');
+    tabs.innerHTML = '';
+    ['away', 'home'].forEach(function (sd) {
+      var t = S.game[sd] || {};
+      var b = document.createElement('button');
+      b.textContent = (t.abbr || sd.toUpperCase()) + ' (' + phRoster(sd).length + ')';
+      b.className = sd === phSide ? 'sel' : '';
+      b.onclick = function () { phSide = sd; renderPhotos(true); };
+      tabs.appendChild(b);
+    });
+    var all = phRoster('away').concat(phRoster('home'));
+    var have = all.filter(function (p) { return p.photo; }).length;
+    $('phNote').textContent = all.length ? '(' + have + ' of ' + all.length + ' have photos)' : '';
+    if (document.activeElement === $('phPattern')) return;
+    if (!$('phPattern')._init && S.config) { $('phPattern').value = S.config.photo_pattern || ''; $('phPattern')._init = true; }
+    var rows = phRoster(phSide);
+    var sig = phSide + JSON.stringify(rows.map(function (p) { return [p.name, p.number, p.photo, p.photoSource]; }));
+    if (sig === phSig && !force) return;
+    if (!force && $('phList').querySelector('.ph-assign')) return;   // don't close an open Assign editor
+    phSig = sig;
+    var L = $('phList');
+    L.innerHTML = rows.length ? '' : '<div class="hint" style="margin:0">No players yet. Rosters come from the data feed; in Manual entry they come from the lineups you type.</div>';
+    var abbr = (S.game[phSide] || {}).abbr || '';
+    rows.forEach(function (p) {
+      var r = document.createElement('div');
+      r.className = 'ph-row';
+      r.innerHTML = '<div class="ph-img"></div><div class="ph-num"></div><div class="nm"></div><span class="ph-src"></span>' +
+        '<button data-a="up">Upload</button><button data-a="as" title="Pick a photo from your library or paste a URL">Assign</button><button data-a="rm" title="Remove the uploaded photo">Remove</button>';
+      var im = r.querySelector('.ph-img');
+      if (p.photo) { var i = document.createElement('img'); i.src = p.photo; i.onerror = function () { im.textContent = 'broken'; }; im.appendChild(i); }
+      else im.textContent = 'none';
+      r.querySelector('.ph-num').textContent = p.number ? '#' + p.number : '';
+      r.querySelector('.nm').textContent = p.name + (p.pos ? '  ' + p.pos : '');
+      var src = r.querySelector('.ph-src');
+      src.textContent = p.photoSource || 'no photo';
+      src.className = 'ph-src ' + (p.photoSource || '');
+      r.querySelector('[data-a=up]').onclick = function () { phTarget = p; $('phOne').click(); };
+      r.querySelector('[data-a=as]').onclick = function () { phAssign(r, p); };
+      var rm = r.querySelector('[data-a=rm]');
+      rm.style.visibility = p.photoSource === 'uploaded' ? 'visible' : 'hidden';
+      rm.onclick = function () {
+        post('/api/photos/remove', { name: p.name, team: abbr, number: p.number }).then(function () { toast('Removed (kept in media/photos/_removed)'); });
+      };
+      r.addEventListener('dragover', function (e) { e.preventDefault(); r.classList.add('drag'); });
+      r.addEventListener('dragleave', function () { r.classList.remove('drag'); });
+      r.addEventListener('drop', function (e) {
+        e.preventDefault(); r.classList.remove('drag');
+        var f = e.dataTransfer.files && e.dataTransfer.files[0];
+        if (f) phUpload(f, p.name);
+      });
+      L.appendChild(r);
+    });
+  }
+  function phAssign(row, p) {
+    var ex = row.querySelector('.ph-assign');
+    if (ex) { ex.remove(); return; }
+    var box = document.createElement('div');
+    box.className = 'ph-assign';
+    box.innerHTML = '<select><option value="">Choose from uploaded photos...</option></select><input type="text" placeholder="or paste an image URL">' +
+      '<button class="btn-primary">Save</button><button>Clear</button>';
+    var sel = box.querySelector('select'), url = box.querySelector('input');
+    var cur = ((S.config && S.config.photo_assign) || {})[slugify(p.name)] || '';
+    url.value = cur;
+    GFX.api('/api/media').then(function (m) {
+      Object.keys(m.photos || {}).sort().forEach(function (k) {
+        var o = document.createElement('option');
+        o.value = m.photos[k];
+        o.textContent = k;
+        sel.appendChild(o);
+      });
+      if (cur) sel.value = cur;
+    });
+    sel.onchange = function () { if (sel.value) url.value = sel.value; };
+    var bs = box.querySelectorAll('button');
+    bs[0].onclick = function () {
+      post('/api/photos/assign', { name: p.name, url: url.value.trim() }).then(function () { toast('Photo assigned to ' + p.name); });
+    };
+    bs[1].onclick = function () {
+      post('/api/photos/assign', { name: p.name, url: '' }).then(function () { toast('Assignment cleared'); });
+    };
+    row.appendChild(box);
+  }
+  function phUpload(file, name) {
+    return new Promise(function (res) {
+      var rd = new FileReader();
+      rd.onload = function () {
+        post('/api/photos/upload', { name: name || '', filename: file.name, data: rd.result }).then(function (r) {
+          if (!r.ok) toast(r.error || 'Upload failed'); else if (name) toast('Photo saved for ' + name);
+          res(r);
+        });
+      };
+      rd.readAsDataURL(file);
+    });
+  }
+  $('phOne').onchange = function () {
+    var f = $('phOne').files[0];
+    if (f && phTarget) phUpload(f, phTarget.name);
+    $('phOne').value = '';
+  };
+  $('phBulk').onclick = function () { $('phFiles').click(); };
+  $('phFiles').onchange = function () {
+    var files = Array.from($('phFiles').files || []);
+    $('phFiles').value = '';
+    if (!files.length) return;
+    var names = {};
+    phRoster('away').concat(phRoster('home')).forEach(function (p) { names[slugify(p.name)] = p.name; });
+    var matched = 0;
+    files.reduce(function (pr, f) {
+      return pr.then(function () {
+        var k = slugify(f.name.replace(/\.[^.]+$/, ''));
+        if (names[k]) matched++;
+        return phUpload(f, '');
+      });
+    }, Promise.resolve()).then(function () {
+      toast(files.length + ' photos saved, ' + matched + ' matched players in this game');
+    });
+  };
+  function slugify(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
+  $('phPatternSave').onclick = function () {
+    post('/api/config', { photo_pattern: $('phPattern').value.trim() }).then(function () { toast('Headshot pattern saved'); });
+  };
+  $('phCard').addEventListener('toggle', function () { renderPhotos(true); });
+
+
+
+  // ------------------------------------------------------------ graphics that need text typed in first
+  // Taking one of these with its fields empty puts nothing on screen; say where to fill it in.
+  var NEEDS = [
+    [/^talent$/, function (d) { return d.style === 'Podcast' || /Podcast/.test(d.name || '') ? ['podcast', 'p1n', 'PODCAST > People'] : ['show', 'host1', 'CUSTOM > Talent']; }],
+    [/^(custom|note)$/, function () { return ['custom', 'line1', 'CUSTOM > Custom lower third text']; }],
+    [/^show_(bug|bp|pregame|postgame)$/, function () { return ['show', 'name', 'CUSTOM > Show']; }],
+    [/^feature$/, function () { return ['notes', 'b1', 'CUSTOM > Notes & stats']; }]
+  ];
+  function flash(text) { S.notice = { text: text, until: Date.now() + 8000 }; renderStatus(); }
+  function emptyWarning(gid, d) {
+    var base = gid.split('__').pop();
+    for (var i = 0; i < NEEDS.length; i++) {
+      if (!NEEDS[i][0].test(base)) continue;
+      var n = NEEDS[i][1](d || {}), sec = (S.ui && S.ui[n[0]]) || {};
+      if (!String(sec[n[1]] || '').trim()) return (d && d.name || base) + ' has no text yet: fill it in under ' + n[2] + '.';
+    }
+    return '';
+  }
+  $('talentTake').onclick = function () {
+    var defs = (S.templates && S.templates.graphics) || {}, a = S.ui && S.ui.activeSet, st = a && S.ui.sets && S.ui.sets[a];
+    var ids = Object.keys(defs).filter(function (k) { return k.split('__').pop() === 'talent'; });
+    var gid = (st && st.gids || []).filter(function (k) { return ids.indexOf(k) >= 0; })[0] || (defs.talent ? 'talent' : ids[0]);
+    if (!gid) return;
+    var w = emptyWarning(gid, defs[gid]);
+    if (w && !((S.ui && S.ui.visible) || {})[gid]) flash(w);
+    post('/api/toggle', { g: gid });
+  };
+
+  // ------------------------------------------------------------ colors (every colour in a style)
+  var COL = { style: '', data: null, all: false, timers: {} };
+  function slugName(n) { return String(n || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
+  function colDefaultStyle(styles) {
+    var a = S.ui && S.ui.activeSet;
+    if (a && a.indexOf('style_') === 0) {
+      var hit = styles.filter(function (n) { return 'style_' + slugName(n) === a; })[0];
+      if (hit) return hit;
+    }
+    return styles[0];
+  }
+  function loadColors(style) {
+    return GFX.api('/api/palette' + (style ? '?style=' + encodeURIComponent(style) : '')).then(function (r) {
+      if (!style) {
+        var def = colDefaultStyle(r.styles);
+        if (def !== r.style) return loadColors(def);
+      }
+      COL.data = r; COL.style = r.style;
+      $('colStyle').innerHTML = r.styles.map(function (n) { return '<option' + (n === r.style ? ' selected' : '') + '>' + GFX.esc(n) + '</option>'; }).join('');
+      renderColors();
+    });
+  }
+  function renderColors() {
+    var d = COL.data; if (!d) return;
+    var list = COL.all ? d.colors : d.colors.slice(0, 16);
+    $('colList').innerHTML = list.map(function (c) {
+      var now = d.overrides[c.hex] || c.hex, ch = !!d.overrides[c.hex];
+      return '<div class="colrow' + (ch ? ' changed' : '') + '" data-hex="' + c.hex + '"><span class="sw" style="background:' + c.hex + '" title="Original ' + c.hex + '"></span>' +
+        '<input type="color" value="' + now + '" data-col="' + c.hex + '">' +
+        '<span class="ci"><b>' + now.toUpperCase() + '</b><br>' + c.count + ' use' + (c.count === 1 ? '' : 's') + ': ' + GFX.esc(c.uses.join(', ')) + '</span>' +
+        (ch ? '<button data-colreset="' + c.hex + '" title="Back to ' + c.hex + '">Reset</button>' : '') + '</div>';
+    }).join('');
+    $('colMore').textContent = COL.all ? 'Show the 16 most used' : 'Show all ' + d.colors.length + ' colors';
+    $('colMore').style.display = d.colors.length > 16 ? '' : 'none';
+    Array.prototype.forEach.call($('colList').querySelectorAll('input[type=color]'), function (inp) {
+      inp.oninput = function () {
+        var k = inp.dataset.col, v = inp.value;
+        inp.parentNode.querySelector('.ci b').textContent = v.toUpperCase();
+        clearTimeout(COL.timers[k]);
+        COL.timers[k] = setTimeout(function () { setColor(k, v); }, 350);
+      };
+    });
+    Array.prototype.forEach.call($('colList').querySelectorAll('[data-colreset]'), function (b) {
+      b.onclick = function () { setColor(b.dataset.colreset, null); };
+    });
+  }
+  function setColor(hex, v) {
+    var o = {}; o[COL.style] = {}; o[COL.style][hex] = v;
+    if (v) COL.data.overrides[hex] = v; else delete COL.data.overrides[hex];
+    post('/api/ui', { colors: o }).then(function () { if (!v) renderColors(); else {
+      var row = $('colList').querySelector('[data-hex="' + hex + '"]'); if (row) row.classList.add('changed'); } });
+  }
+  $('colStyle').onchange = function () { COL.all = false; loadColors($('colStyle').value); };
+  $('colMore').onclick = function () { COL.all = !COL.all; renderColors(); };
+  $('colReset').onclick = function () {
+    var o = {}; o[COL.style] = null;
+    post('/api/ui', { colors: o }).then(function () { loadColors(COL.style); });
+  };
+  $('colCard').addEventListener('toggle', function () { if ($('colCard').open && !COL.data) loadColors(); });
+
+  // ------------------------------------------------------------ podcast tab
+  // Fields live in ui.podcast; the Podcast package's graphics read them as {podcast.*}.
+  var POD = [
+    { t: 'Show', open: true, f: [['name', 'Show name'], ['tagline', 'Tagline'], ['ep', 'Episode number'], ['epTitle', 'Episode title'],
+        ['logo', 'Show logo (blank uses the brand logo)', 'logo'], ['live', 'Show LIVE on the bug', 'check']],
+      g: [['pod_open', 'Show Open'], ['pod_bug', 'Show Bug'], ['pod_episode', 'Episode Title']] },
+    { t: 'People and who is on the mic', open: true, mic: true, f: [
+        ['p1n', 'Person 1 name'], ['p1r', 'Role'], ['p1h', 'Handle'], ['p1p', 'Photo', 'photo'],
+        ['p2n', 'Person 2 name'], ['p2r', 'Role'], ['p2h', 'Handle'], ['p2p', 'Photo', 'photo'],
+        ['p3n', 'Person 3 name'], ['p3r', 'Role'], ['p3h', 'Handle'], ['p3p', 'Photo', 'photo'],
+        ['p4n', 'Person 4 name'], ['p4r', 'Role'], ['p4h', 'Handle'], ['p4p', 'Photo', 'photo']],
+      g: [['pod_name', 'Name Bar: On Mic'], ['pod_mic', 'On Mic Tag'], ['pod_p1', 'Person 1'], ['pod_p2', 'Person 2'], ['pod_p3', 'Person 3'], ['pod_p4', 'Person 4'],
+          ['pod_panel', 'Panel Intro'], ['talent', 'Talent (persons 1 and 2)']] },
+    { t: 'Note and custom lower third', f: [['custom.line1', 'Line 1', 'full'], ['custom.line2', 'Line 2', 'full']],
+      g: [['note', 'Note'], ['custom', 'Custom Lower Third']] },
+    { t: 'Guest', f: [['gName', 'Guest name'], ['gTitle', 'Title (e.g. Former pro pitcher)'], ['gHandle', 'Handle'], ['gPhoto', 'Photo', 'photo'],
+        ['gB1', 'Fact 1', 'full'], ['gB2', 'Fact 2', 'full'], ['gB3', 'Fact 3', 'full']],
+      g: [['pod_guest', 'Guest Intro'], ['pod_guest_bar', 'Name Bar: Guest']] },
+    { t: 'Topic and rundown', open: true, rundown: true, f: [['seg', 'Segment label'], ['topic', 'Current topic'], ['next', 'Coming up', 'full'],
+        ['agenda', 'Rundown (one item per line)', 'area']],
+      g: [['pod_topic', 'Topic Bar'], ['pod_rundown', 'Rundown'], ['pod_segment', 'Segment Bumper'], ['pod_upnext', 'Coming Up']] },
+    { t: 'Quote', f: [['quote', 'Quote', 'area'], ['quoteBy', 'Who said it'], ['quoteSrc', 'Source']], g: [['pod_quote', 'Quote']] },
+    { t: 'Head to head', f: [['cmpTitle', 'Title'], ['cmpL', 'Left (player or team)'], ['cmpR', 'Right'], ['cmp', 'Rows: Label | Left | Right', 'area']],
+      g: [['pod_compare', 'Head to Head']] },
+    { t: 'Poll', f: [['poll', 'Question', 'full'], ['pollOpts', 'Options: Option | percent (up to 4)', 'area'], ['pollReveal', 'Show results', 'check']],
+      g: [['pod_poll', 'Poll']] },
+    { t: 'Mailbag and live chat', f: [['qSource', 'Label (Mailbag, Live chat...)'], ['qHandle', 'From'], ['qText', 'Question or comment', 'area']],
+      g: [['pod_question', 'Question']] },
+    { t: 'Top 5 countdown', top: true, f: [['topTitle', 'Title'], ['top', 'List, number 1 first: Entry | note', 'area']], g: [['pod_top', 'Top 5']] },
+    { t: 'Picks and hot takes', f: [['picksTitle', 'Picks title'], ['picks', 'Picks: Who | Pick | Why', 'area'], ['take', 'Hot take', 'area'], ['takeBy', 'Whose take']],
+      g: [['pod_picks', 'Picks'], ['pod_take', 'Hot Take']] },
+    { t: 'Follow, sponsor and QR', f: [['x', 'X'], ['ig', 'Instagram'], ['yt', 'YouTube'], ['tt', 'TikTok'], ['web', 'Website'], ['cta', 'Call to action'],
+        ['adHead', 'Sponsor heading'], ['adText', 'Sponsor message'], ['adCode', 'Promo code'], ['adUrl', 'Sponsor link (makes a QR code)'],
+        ['qrUrl', 'QR card link'], ['qrText', 'QR card caption']],
+      g: [['pod_follow', 'Follow / Subscribe'], ['pod_sponsor', 'Sponsor Read'], ['pod_qr', 'QR Code']] },
+    { t: 'Full screens and remote guests', f: [['soonTime', 'Start time (e.g. 7:00 PM)'], ['soonMsg', 'Starting soon text'], ['brbMsg', 'Be right back text'],
+        ['endMsg', 'End text']],
+      g: [['pod_soon', 'Starting Soon'], ['pod_brb', 'Be Right Back'], ['pod_end', 'Thanks for Watching'], ['pod_remote2', 'Remote: 2 Up'],
+          ['pod_remote3', 'Remote: 3 Up'], ['pod_remote4', 'Remote: 4 Up']] }
+  ];
+  function podVals() { return (S.ui && S.ui.podcast) || {}; }
+  function podGid(base) {
+    var defs = (S.templates && S.templates.graphics) || {};
+    if (defs['podcast__' + base]) return 'podcast__' + base;   // the Podcast style's version first (Talent, Note...)
+    if (defs[base]) return base;
+    return null;
+  }
+  var podTimers = {}, podPending = {};
+  function podPatch(k, v) {
+    var dot = k.indexOf('.'), o = {}, w = {};
+    if (dot > 0) { o[k.slice(dot + 1)] = v; w[k.slice(0, dot)] = o; return w; }   // e.g. custom.line1
+    o[k] = v; return { podcast: o };
+  }
+  function podSend(k, v) {
+    clearTimeout(podTimers[k]);
+    podPending[k] = true;
+    podTimers[k] = setTimeout(function () { post('/api/ui', podPatch(k, v)).then(function () { podPending[k] = false; }); }, 250);
+  }
+  (function buildPodcast() {
+    var html = '';
+    POD.forEach(function (sec, si) {
+      html += '<details class="card"' + (sec.open ? ' open' : '') + '><summary>' + GFX.esc(sec.t) + '</summary><div class="body g2">';
+      if (sec.mic) html += '<div class="full"><label>On the mic</label><div class="mics">' + ['1', '2', '3', '4', 'g'].map(function (m) {
+        return '<button data-mic="' + m + '">' + (m === 'g' ? 'Guest' : 'Person ' + m) + '</button>'; }).join('') + '</div></div>';
+      sec.f.forEach(function (f) {
+        var k = f[0], kind = f[2] || '';
+        if (kind === 'check') {
+          html += '<div class="full"><label class="row" style="margin:0"><input type="checkbox" data-pk="' + k + '" style="width:auto"> <span style="text-transform:none;letter-spacing:0;color:var(--text)">' + GFX.esc(f[1]) + '</span></label></div>';
+        } else if (kind === 'area') {
+          html += '<div class="full"><label>' + GFX.esc(f[1]) + '</label><textarea rows="4" data-pk="' + k + '"></textarea></div>';
+        } else if (kind === 'photo' || kind === 'logo') {
+          html += '<div' + (kind === 'logo' ? ' class="full"' : '') + '><label>' + GFX.esc(f[1]) + '</label><div class="row"><input type="text" data-pk="' + k + '" placeholder="URL or upload"><button data-pup="' + k + '" data-kind="' + (kind === 'logo' ? 'logos' : 'photos') + '">Upload</button></div></div>';
+        } else {
+          html += '<div' + (kind === 'full' ? ' class="full"' : '') + '><label>' + GFX.esc(f[1]) + '</label><input type="text" data-pk="' + k + '"></div>';
+        }
+      });
+      if (sec.rundown) html += '<div class="full row"><button data-ag="-1" style="flex:1">&#9664; Previous item</button><button data-ag="1" style="flex:1">Next item &#9654;</button></div>' +
+        '<div class="full hint" id="agNow"></div><div class="full hint">Previous / Next move the highlight on the Rundown and make that item the current topic.</div>';
+      if (sec.top) html += '<div class="full row"><button id="topNext" style="flex:1">Reveal next</button><button id="topReset" style="flex:1">Hide all</button></div><div class="full hint" id="topNow"></div>';
+      html += '<div class="full podtakes">' + sec.g.map(function (g) { return '<button data-ptake="' + g[0] + '">' + GFX.esc(g[1]) + '</button>'; }).join('') + '</div>';
+      html += '</div></details>';
+    });
+    html += '<div class="card hint">These graphics come with the Podcast style: pick <b>Podcast</b> in the Graphics set menu (Graphics tab), or turn on Other packages so they are listed. ' +
+      'Remote frames are see-through windows: put each video call in OBS under the graphics at the window positions in the guide.</div>';
+    $('podCards').innerHTML = html;
+    Array.prototype.forEach.call(document.querySelectorAll('#podCards [data-pk]'), function (inp) {
+      var k = inp.dataset.pk;
+      if (inp.type === 'checkbox') inp.onchange = function () { post('/api/ui', podPatch(k, inp.checked)); };
+      else inp.oninput = function () { podSend(k, inp.value); };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('#podCards [data-pup]'), function (b) {
+      b.onclick = function () {
+        upload(b.dataset.kind, 'podcast-' + b.dataset.pup, function (url) {
+          var inp = document.querySelector('#podCards [data-pk="' + b.dataset.pup + '"]'); inp.value = url; podSend(b.dataset.pup, url);
+        });
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('#podCards [data-mic]'), function (b) {
+      b.onclick = function () { post('/api/ui', { podcast: { speaker: b.dataset.mic } }); };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('#podCards [data-ag]'), function (b) {
+      b.onclick = function () {
+        var v = podVals(), items = String(v.agenda || '').split('\n').map(function (x) { return x.split('|')[0].trim(); }).filter(Boolean);
+        if (!items.length) return;
+        var i = Math.max(0, Math.min(items.length - 1, (Number(v.agendaIdx) || 0) + Number(b.dataset.ag)));
+        post('/api/ui', { podcast: { agendaIdx: i, topic: items[i] } });
+      };
+    });
+    $('topNext').onclick = function () {
+      var v = podVals(), n = String(v.top || '').split('\n').filter(function (x) { return x.trim(); }).length;
+      post('/api/ui', { podcast: { topReveal: Math.min(n, (Number(v.topReveal) || 0) + 1) } });
+    };
+    $('topReset').onclick = function () { post('/api/ui', { podcast: { topReveal: 0 } }); };
+    Array.prototype.forEach.call(document.querySelectorAll('#podCards [data-ptake]'), function (b) {
+      b.onclick = function () {
+        var gid = podGid(b.dataset.ptake);
+        if (!gid) { flash('Podcast graphics are not loaded: pick the Podcast style set, or turn on Other packages.'); return; }
+        post('/api/toggle', { g: gid });
+      };
+    });
+  })();
+  function renderPodcast() {
+    var v = podVals(), vis = (S.ui && S.ui.visible) || {};
+    Array.prototype.forEach.call(document.querySelectorAll('#podCards [data-pk]'), function (inp) {
+      if (document.activeElement === inp || podPending[inp.dataset.pk]) return;
+      var pk = inp.dataset.pk, dt = pk.indexOf('.');
+      var val = dt > 0 ? ((S.ui && S.ui[pk.slice(0, dt)]) || {})[pk.slice(dt + 1)] : v[pk];
+      if (inp.type === 'checkbox') inp.checked = !!val;
+      else if (inp.value !== String(val == null ? '' : val)) inp.value = val == null ? '' : val;
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('#podCards [data-mic]'), function (b) { b.classList.toggle('on', String(v.speaker || '1') === b.dataset.mic); });
+    Array.prototype.forEach.call(document.querySelectorAll('#podCards [data-ptake]'), function (b) {
+      var gid = podGid(b.dataset.ptake);
+      b.classList.toggle('on', !!(gid && vis[gid]));
+      b.disabled = !gid;
+    });
+    var items = String(v.agenda || '').split('\n').filter(function (x) { return x.trim(); });
+    if ($('agNow')) $('agNow').textContent = items.length ? 'On item ' + ((Number(v.agendaIdx) || 0) + 1) + ' of ' + items.length : '';
+    var tn = String(v.top || '').split('\n').filter(function (x) { return x.trim(); }).length;
+    if ($('topNow')) $('topNow').textContent = 'Revealed ' + (Number(v.topReveal) || 0) + ' of ' + tn + ' (counts down from the bottom of the list)';
+  }
+
+
+  // ------------------------------------------------------------ game ops tab
+  // Fields live in ui.ops; every style's game-ops graphics read them as {ops.*}. Take buttons find the active style's version.
+  var OPS = [
+    { t: 'Rundown', open: true, rundown: true, f: [], g: [] },
+    { t: 'Substitution and pitching change', open: true, f: [['subType', 'Type (Pinch hitter, Pinch runner, Defensive change...)'], ['subTeam', 'Team', 'team'],
+        ['subIn', 'Player in'], ['subInNum', 'Number'], ['subPos', 'Position'], ['subOut', 'Replacing']],
+      g: [['sub_notice', 'Substitution'], ['pitching_change', 'Pitching Change']],
+      hint: 'Pitching Change shows the current pitcher and, from the data feed, the pitcher he replaced.' },
+    { t: 'Pitch tracker', open: true, pitches: true, f: [['pitches', 'Pitches this at-bat: Type | mph | x | z | result (b, s, w, f, x)', 'area']],
+      g: [['strike_zone', 'Strike Zone'], ['last_pitch', 'Last Pitch'], ['pitch_mix', 'Pitch Mix']] },
+    { t: 'Pitch clock, pickoffs and mound visits', clock: true, f: [['pcSecs', 'Clock seconds'], ['pickoffs', 'Pickoffs left'], ['visitsAway', 'Mound visits left (away)'],
+        ['visitsHome', 'Mound visits left (home)']], g: [['pitch_clock', 'Pitch Clock']] },
+    { t: 'Challenges and replay review', review: true, f: [['chalAway', 'Challenges left (away)'], ['chalHome', 'Challenges left (home)'], ['revTeam', 'Challenging team', 'team'],
+        ['revCall', 'Call being reviewed', 'full']], g: [['challenge_bug', 'Challenge / Review'], ['tr_replay', 'Replay Transition']] },
+    { t: 'Bullpen', f: [['bpAway', 'Away: Name | Hand | Status (Warming, Available, Unavailable) | Last 3 days', 'area'], ['bpHome', 'Home: same', 'area']],
+      g: [['bullpen_board', 'Bullpen']], hint: 'Blank uses the relievers on the roster. Set the side with the graphic\'s side switch on the GRAPHICS tab (it follows the fielding team).' },
+    { t: 'Hit data and TrackMan', tm: true, f: [['hitEv', 'Exit velo (mph)'], ['hitLa', 'Launch angle'], ['hitDist', 'Distance (ft)']],
+      g: [['hit_data', 'Hit Data'], ['spray_chart', 'Spray Chart']], hint: 'Type the last batted ball\'s numbers.' },
+    { t: 'Storylines', f: [['streaks', 'Streaks: Player | Streak | Count', 'area'], ['milestones', 'Milestones: Player | Milestone | Current', 'area'],
+        ['cmpTitle', 'Comparison title'], ['compare', 'Team comparison: Stat | Away | Home', 'area'],
+        ['seriesAway', 'Series wins (away)'], ['seriesHome', 'Series wins (home)'], ['seriesNote', 'Series note (e.g. rivalry name)'], ['lastMeet', 'Last meeting'],
+        ['nextMeet', 'Next meeting'], ['movesTitle', 'Roster moves title'], ['moves', 'Roster moves: Date | Player | Move', 'area']],
+      g: [['streaks_card', 'Streaks'], ['milestones_card', 'Milestones'], ['team_compare', 'Team Comparison'], ['season_series_card', 'Season Series'],
+          ['moves_card', 'Roster Moves']] },
+    { t: 'Weather', f: [['wxTemp', 'Temperature'], ['wxWind', 'Wind'], ['wxCond', 'Sky'], ['wxHum', 'Humidity']], g: [['weather_bar', 'Weather']],
+      hint: 'Blank temperature and wind use the data feed when it has them.' },
+    { t: 'Breaks: delay and technical difficulties', delay: true, f: [['delayTitle', 'Delay title (Rain delay, Weather delay...)'], ['delayResume', 'Resume time (blank counts up)'],
+        ['delayMsg', 'Delay message', 'full'], ['techTitle', 'Slate title'], ['techMsg', 'Slate message']],
+      g: [['delay_screen', 'Delay Screen'], ['tech_slate', 'Technical Difficulties']] },
+    { t: 'Postgame', f: [['star1', 'First star: Name | Team | Line', 'full'], ['star2', 'Second star', 'full'], ['star3', 'Third star', 'full']],
+      g: [['three_stars', 'Three Stars'], ['final', 'Game Final (W / L / S)']] },
+    { t: 'Fans and sponsors', kc: true, f: [['kTitle', 'Strikeout counter title'], ['kTeam', 'Count strikeouts by', 'team2'], ['billTag', 'Billboard tagline', 'full'],
+        ['promosTitle', 'Promotions title'], ['promos', 'Promotions: Date | Opponent | Promotion', 'area'], ['shoutsTitle', 'Shout-outs title'],
+        ['shouts', 'Shout-outs: Message | Note (one per line)', 'area'], ['podcast.poll', 'Poll question', 'full'], ['podcast.pollOpts', 'Poll options: Option | percent', 'area'],
+        ['podcast.pollReveal', 'Show poll results', 'check'], ['podcast.x', 'X'], ['podcast.ig', 'Instagram'], ['podcast.yt', 'YouTube'], ['podcast.tt', 'TikTok'],
+        ['podcast.web', 'Website']],
+      g: [['k_counter', 'Strikeout Counter'], ['billboard', 'Sponsor Billboard'], ['promos_card', 'Promotions'], ['shout_lower', 'Shout-out'],
+          ['shouts_card', 'Shout-outs List'], ['fan_poll', 'Fan Poll'], ['social_bar', 'Follow Us']],
+      hint: 'The counter and billboard use the sponsor slots kcounter and billboard (CUSTOM > Sponsors).' },
+    { t: 'Stream Deck, hotkeys and key + fill', help: true, f: [], g: [] }
+  ];
+  function opsVals() { return (S.ui && S.ui.ops) || {}; }
+  function opsGid(base) {
+    var defs = (S.templates && S.templates.graphics) || {};
+    var sets = (S.ui && S.ui.sets) || {}, act = S.ui && S.ui.activeSet, gids = (act && sets[act] && sets[act].gids) || [];
+    for (var i = 0; i < gids.length; i++) if ((gids[i] === base || gids[i].slice(-base.length - 2) === '__' + base) && defs[gids[i]]) return gids[i];
+    if (defs[base]) return base;
+    var k = Object.keys(defs).filter(function (g) { return g.slice(-base.length - 2) === '__' + base; })[0];
+    return k || null;
+  }
+  var opsTimers = {}, opsPending = {};
+  function opsPatch(k, v) {
+    var dot = k.indexOf('.'), o = {}, w = {};
+    if (dot > 0) { o[k.slice(dot + 1)] = v; w[k.slice(0, dot)] = o; return w; }
+    o[k] = v; return { ops: o };
+  }
+  function opsSend(k, v) {
+    clearTimeout(opsTimers[k]);
+    opsPending[k] = true;
+    opsTimers[k] = setTimeout(function () { post('/api/ui', opsPatch(k, v)).then(function () { opsPending[k] = false; }); }, 250);
+  }
+  var padSel = null;
+  (function buildOps() {
+    var html = '';
+    OPS.forEach(function (sec) {
+      html += '<details class="card"' + (sec.open ? ' open' : '') + '><summary>' + GFX.esc(sec.t) + '</summary><div class="body g2">';
+      if (sec.rundown) html += '<div class="full hint" style="margin-top:0">Queue graphics in show order. Next takes the next one and clears the one on air. ' +
+        'Also on OBS hotkeys and Stream Deck (see the last card).</div><div class="full row"><select id="rdPick" style="flex:1"></select><button id="rdAdd">Add</button></div>' +
+        '<ul class="rd full" id="rdList"></ul><div class="full row"><button id="rdPrev" style="flex:1">&#9664; Prev</button><button id="rdTake" style="flex:1">Take</button>' +
+        '<button id="rdClear" style="flex:1">Clear</button><button id="rdNext" style="flex:1">Next &#9654;</button></div>';
+      if (sec.pitches) {
+        html += '<div class="full"><label>Pitch pad: pick a spot (inner 3 x 3 is the zone, catcher\'s view), then the result</label><div class="pad" id="pad"></div></div>' +
+          '<div><label>Pitch type</label><input type="text" id="padType" list="pitchTypes" value="Fastball"><datalist id="pitchTypes"><option>Four-seam fastball</option>' +
+          '<option>Sinker</option><option>Cutter</option><option>Slider</option><option>Sweeper</option><option>Curveball</option><option>Changeup</option><option>Splitter</option>' +
+          '<option>Knuckle curve</option></datalist></div><div><label>Speed (mph)</label><input type="text" id="padMph"></div>' +
+          '<div class="full row">' + [['b', 'Ball'], ['s', 'Called strike'], ['w', 'Swinging'], ['f', 'Foul'], ['x', 'In play']].map(function (r) {
+            return '<button data-pres="' + r[0] + '" style="flex:1">' + r[1] + '</button>'; }).join('') + '</div>' +
+          '<div class="full row"><button id="padUndo" style="flex:1">Undo last pitch</button><button id="padClear" style="flex:1">New at-bat (clear)</button></div>';
+      }
+      if (sec.clock) html += '<div class="full row"><button data-pc="start" style="flex:1">Start</button><button data-pc="stop" style="flex:1">Stop</button><button data-pc="reset" style="flex:1">Reset</button></div>';
+      if (sec.review) html += '<div class="full row">' + [['review', 'Under review'], ['stands', 'Call stands'], ['overturned', 'Overturned'], ['confirmed', 'Confirmed'], ['', 'Clear']].map(function (r) {
+        return '<button data-rev="' + r[0] + '" style="flex:1">' + r[1] + '</button>'; }).join('') + '</div>';
+      if (sec.delay) html += '<div class="full row"><button data-dl="start" style="flex:1">Start delay timer</button><button data-dl="stop" style="flex:1">Reset delay timer</button></div>';
+      if (sec.kc) html += '<div class="full row"><button data-k="-1" style="flex:1">K -1</button><button data-k="+1" style="flex:1">K +1</button><button data-k="reset" style="flex:1">Reset</button>' +
+        '<button id="kAuto" style="flex:1">Count from data</button><button id="shNext" style="flex:1">Next shout-out</button></div><div class="full hint" id="kNow"></div>';
+      if (sec.tm) html += '<div class="full"><label>TrackMan CSV (spray charts, exit velo, pitch mix)</label><div class="row"><input type="file" id="tmFile" accept=".csv" multiple style="flex:1">' +
+        '<label class="row" style="margin:0"><input type="checkbox" id="tmReplace" style="width:auto"> <span style="text-transform:none;letter-spacing:0;color:var(--text)">Replace stored data</span></label></div>' +
+        '<div class="hint" id="tmNow">Upload game or season exports from TrackMan; they add up. Players are matched by name.</div></div>';
+      if (sec.help) html += '<div class="full hint" style="margin-top:0" id="opsHelp"></div>';
+      sec.f.forEach(function (f) {
+        var k = f[0], kind = f[2] || '';
+        if (kind === 'check') {
+          html += '<div class="full"><label class="row" style="margin:0"><input type="checkbox" data-ok="' + k + '" style="width:auto"> <span style="text-transform:none;letter-spacing:0;color:var(--text)">' + GFX.esc(f[1]) + '</span></label></div>';
+        } else if (kind === 'area') {
+          html += '<div class="full"><label>' + GFX.esc(f[1]) + '</label><textarea rows="4" data-ok="' + k + '"></textarea></div>';
+        } else if (kind === 'team' || kind === 'team2') {
+          var opts = kind === 'team' ? [['batting', 'Batting team'], ['fielding', 'Fielding team'], ['away', 'Away'], ['home', 'Home']] : [['home', 'Home pitchers'], ['away', 'Away pitchers']];
+          html += '<div><label>' + GFX.esc(f[1]) + '</label><select data-ok="' + k + '">' + opts.map(function (o) { return '<option value="' + o[0] + '">' + o[1] + '</option>'; }).join('') + '</select></div>';
+        } else {
+          html += '<div' + (kind === 'full' ? ' class="full"' : '') + '><label>' + GFX.esc(f[1]) + '</label><input type="text" data-ok="' + k + '"></div>';
+        }
+      });
+      if (sec.hint) html += '<div class="full hint">' + sec.hint + '</div>';
+      if (sec.g.length) html += '<div class="full podtakes">' + sec.g.map(function (g) { return '<button data-otake="' + g[0] + '">' + GFX.esc(g[1]) + '</button>'; }).join('') + '</div>';
+      html += '</div></details>';
+    });
+    $('opsCards').innerHTML = html;
+    var o = location.origin;
+    $('opsHelp').innerHTML = '<b>OBS hotkeys</b> (Settings &gt; Hotkeys, then a Stream Deck OBS action): every graphic has Toggle, plus Rundown next / previous / clear, ' +
+      'Pitch clock start / reset, Strikeout counter +1 and Next shout-out.<br><b>Stream Deck / Companion</b> (a web request or "open URL in background" action), for example:' +
+      '<br><code>' + o + '/api/cmd?do=next</code> &nbsp; <code>' + o + '/api/cmd?do=toggle&amp;g=strike_zone</code> &nbsp; <code>' + o + '/api/cmd?do=clock_start</code>' +
+      '<br>Commands: toggle / on / off (&amp;g=graphic id), next, prev, take, clear, goto (&amp;i=number), alloff, clock_start, clock_stop, clock_reset, delay_start, delay_stop, k_up, k_down, shout_next.' +
+      '<br><b>Key + fill</b> for a hardware switcher: add <code>&amp;out=fill</code> or <code>&amp;out=key</code> to any overlay link, e.g. <code>' + o + '/overlay.html?g=all&amp;out=fill</code> ' +
+      'and <code>' + o + '/overlay.html?g=all&amp;out=key</code>, each in its own OBS scene sent to its own output (NDI, SDI card or projector).';
+    Array.prototype.forEach.call(document.querySelectorAll('#opsCards [data-ok]'), function (inp) {
+      var k = inp.dataset.ok;
+      if (inp.type === 'checkbox') inp.onchange = function () { post('/api/ui', opsPatch(k, inp.checked)); };
+      else if (inp.tagName === 'SELECT') inp.onchange = function () { post('/api/ui', opsPatch(k, inp.value)); };
+      else inp.oninput = function () { opsSend(k, inp.value); };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('#opsCards [data-otake]'), function (b) {
+      b.onclick = function () {
+        var gid = opsGid(b.dataset.otake);
+        if (!gid) { flash('This graphic is not in the loaded set. Pick a style set on the GRAPHICS tab.'); return; }
+        post('/api/toggle', { g: gid });
+      };
+    });
+    // pitch pad: 5 x 5 spots; the middle 3 x 3 is the zone
+    var pad = $('pad'), ph = '';
+    for (var r = 0; r < 6; r++) for (var c = 0; c < 5; c++) {
+      var x = (c - 2) * 0.66, z = 1.25 - r * 0.33, inz = r >= 1 && r <= 3 && c >= 1 && c <= 3;
+      ph += '<button data-px="' + x.toFixed(2) + '" data-pz="' + z.toFixed(2) + '" class="' + (inz ? 'in' : '') + '">' + (inz ? '' : '&middot;') + '</button>';
+    }
+    pad.innerHTML = ph;
+    Array.prototype.forEach.call(pad.querySelectorAll('button'), function (b) {
+      b.onclick = function () { Array.prototype.forEach.call(pad.querySelectorAll('button'), function (x) { x.classList.remove('sel'); }); b.classList.add('sel'); padSel = [b.dataset.px, b.dataset.pz]; };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('#opsCards [data-pres]'), function (b) {
+      b.onclick = function () {
+        if (!padSel) { flash('Pick where the pitch crossed the plate first.'); return; }
+        var line = [$('padType').value || 'Pitch', $('padMph').value || '', padSel[0], padSel[1], b.dataset.pres].join(' | ');
+        var cur = String(opsVals().pitches || '').trim();
+        post('/api/ui', { ops: { pitches: cur ? cur + '\n' + line : line } });
+        $('padMph').value = '';
+      };
+    });
+    $('padUndo').onclick = function () { post('/api/ui', { ops: { pitchCmd: 'undo' } }); };
+    $('padClear').onclick = function () { post('/api/ui', { ops: { pitchCmd: 'clear' } }); };
+    Array.prototype.forEach.call(document.querySelectorAll('#opsCards [data-pc]'), function (b) { b.onclick = function () { post('/api/ui', { ops: { pcCmd: b.dataset.pc } }); }; });
+    Array.prototype.forEach.call(document.querySelectorAll('#opsCards [data-rev]'), function (b) { b.onclick = function () { post('/api/ui', { ops: { revStatus: b.dataset.rev } }); }; });
+    Array.prototype.forEach.call(document.querySelectorAll('#opsCards [data-dl]'), function (b) { b.onclick = function () { post('/api/ui', { ops: { delayCmd: b.dataset.dl } }); }; });
+    Array.prototype.forEach.call(document.querySelectorAll('#opsCards [data-k]'), function (b) { b.onclick = function () { post('/api/ui', { ops: { kCmd: b.dataset.k } }); }; });
+    $('kAuto').onclick = function () { post('/api/ui', { ops: { kMode: 'auto' } }); };
+    $('shNext').onclick = function () { post('/api/cmd', { do: 'shout_next' }); };
+    $('tmFile').onchange = function () {
+      var files = Array.prototype.slice.call(this.files || []), rep = $('tmReplace').checked, inp = this;
+      (function next(i) {
+        if (i >= files.length) { inp.value = ''; return; }
+        var fr = new FileReader();
+        fr.onload = function () {
+          post('/api/trackman', { csv: fr.result, replace: rep && i === 0 }).then(function (r) {
+            $('tmNow').textContent = r && r.ok ? 'Loaded ' + files[i].name + ': ' + r.added + ' new pitches. Stored: ' + r.batters + ' batters, ' + r.pitchers + ' pitchers.'
+              : ((r && r.error) || 'Could not read ' + files[i].name);
+            next(i + 1);
+          });
+        };
+        fr.readAsText(files[i]);
+      })(0);
+    };
+    // rundown
+    $('rdAdd').onclick = function () {
+      var g = $('rdPick').value; if (!g) return;
+      post('/api/ui', { ops: { rundown: (opsVals().rundown || []).concat([g]) } });
+    };
+    $('rdPrev').onclick = function () { post('/api/cmd', { do: 'prev' }); };
+    $('rdNext').onclick = function () { post('/api/cmd', { do: 'next' }); };
+    $('rdTake').onclick = function () { post('/api/cmd', { do: 'take' }); };
+    $('rdClear').onclick = function () { post('/api/cmd', { do: 'clear' }); };
+  })();
+  var rdSig = '';
+  function renderOps() {
+    var v = opsVals(), vis = (S.ui && S.ui.visible) || {}, defs = (S.templates && S.templates.graphics) || {};
+    Array.prototype.forEach.call(document.querySelectorAll('#opsCards [data-ok]'), function (inp) {
+      if (document.activeElement === inp || opsPending[inp.dataset.ok]) return;
+      var k = inp.dataset.ok, dt = k.indexOf('.');
+      var val = dt > 0 ? ((S.ui && S.ui[k.slice(0, dt)]) || {})[k.slice(dt + 1)] : v[k];
+      if (inp.type === 'checkbox') inp.checked = val !== false && !!(val || k === 'pitchFeed');
+      else if (inp.value !== String(val == null ? '' : val)) inp.value = val == null ? '' : val;
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('#opsCards [data-otake]'), function (b) {
+      var gid = opsGid(b.dataset.otake);
+      b.classList.toggle('on', !!(gid && vis[gid]));
+      b.disabled = !gid;
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('#opsCards [data-rev]'), function (b) { b.classList.toggle('on', (v.revStatus || '') === b.dataset.rev && !!b.dataset.rev); });
+    var pc = v.pclock || {};
+    Array.prototype.forEach.call(document.querySelectorAll('#opsCards [data-pc]'), function (b) { b.classList.toggle('on', b.dataset.pc === 'start' && !!pc.running); });
+    if ($('kNow')) $('kNow').textContent = v.kMode === 'manual' ? 'Counting by hand: ' + (v.kCount || 0) : 'Counting strikeouts from the data feed (' + (v.kTeam === 'away' ? 'away' : 'home') + ' pitchers)';
+    // rundown list and picker (graphics in the loaded set)
+    var items = v.rundown || [], idx = v.rundownIdx == null ? -1 : v.rundownIdx;
+    var gids = Object.keys(defs).filter(function (g) { return !defs[g].layout || defs[g].presetId; });
+    var sig = JSON.stringify([items, idx, gids.length, Object.keys(vis).filter(function (g) { return vis[g]; })]);
+    if (sig === rdSig) return;
+    rdSig = sig;
+    var pick = $('rdPick'), keep = pick.value;
+    pick.innerHTML = '<option value="">Add a graphic...</option>' + gids.sort(function (a, b) { return (defs[a].name || a).localeCompare(defs[b].name || b); })
+      .map(function (g) { return '<option value="' + GFX.esc(g) + '">' + GFX.esc(defs[g].name || g) + '</option>'; }).join('');
+    pick.value = keep;
+    $('rdList').innerHTML = items.map(function (g, i) {
+      return '<li class="' + (i === idx ? 'cur' : '') + '"><b>' + (i + 1) + '</b><span>' + GFX.esc((defs[g] && defs[g].name) || g) + (vis[g] ? ' &#9679;' : '') + '</span>' +
+        '<button data-rgo="' + i + '">Go</button><button data-rup="' + i + '">&#9650;</button><button data-rdel="' + i + '">&#10005;</button></li>';
+    }).join('') || '<li class="hint">Nothing queued yet.</li>';
+    Array.prototype.forEach.call(document.querySelectorAll('#rdList [data-rgo]'), function (b) { b.onclick = function () { post('/api/cmd', { do: 'goto', i: Number(b.dataset.rgo) }); }; });
+    Array.prototype.forEach.call(document.querySelectorAll('#rdList [data-rup]'), function (b) {
+      b.onclick = function () { var i = Number(b.dataset.rup); if (!i) return; var a = items.slice(); a.splice(i - 1, 0, a.splice(i, 1)[0]); post('/api/ui', { ops: { rundown: a } }); };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('#rdList [data-rdel]'), function (b) {
+      b.onclick = function () { var a = items.slice(); a.splice(Number(b.dataset.rdel), 1); post('/api/ui', { ops: { rundown: a, rundownIdx: Math.min(idx, a.length - 1) } }); };
+    });
+  }
+  // ------------------------------------------------------------ LIVE tab (on air, game pad, hot buttons)
+  function defsAll() { return (S.templates && S.templates.graphics) || {}; }
+  function visAll() { return (S.ui && S.ui.visible) || {}; }
+  function liveManual() { return curSport() === 'baseball' && (S.edition === 'manual' || (S.config && S.config.source === 'manual')); }
+  function takeGfx(gid) {
+    var d = defsAll()[gid]; if (!d) return;
+    var w = emptyWarning(gid, d);
+    if (w && !visAll()[gid]) flash(w);
+    post('/api/toggle', { g: gid });
+  }
+  function splitName(n) { var m = /^(.*) \(([^()]+)\)$/.exec(n || ''); return m ? [m[1], m[2]] : [n || '', '']; }
+
+  function renderAir() {
+    var defs = defsAll(), vis = visAll();
+    var on = Object.keys(vis).filter(function (g) { return vis[g] && defs[g]; });
+    var sig = on.join();
+    var box = $('lvAir'); if (box._sig === sig) return; box._sig = sig;
+    box.innerHTML = on.length ? '' : '<span class="none">Nothing on air.</span>';
+    on.forEach(function (g) {
+      var b = document.createElement('button'); b.className = 'air'; b.title = 'Take out';
+      b.textContent = splitName(defs[g].name || g)[0]; b.onclick = function () { post('/api/toggle', { g: g, on: false }); };
+      box.appendChild(b);
+    });
+    var ao = document.createElement('button'); ao.className = 'alloff'; ao.textContent = 'ALL OUT';
+    ao.title = 'Take every graphic out' + ($('keepBug').checked ? ' (keeps the scorebug: see Graphics tab)' : '');
+    ao.onclick = function () { $('bAllOff').click(); };
+    box.appendChild(ao);
+  }
+
+  // Game board: always shows the live game (any source); the pad scores by hand when the source is Manual entry.
+  function renderLiveGame() {
+    var g = S.game || {}, man_ = liveManual(), base = curSport() === 'baseball';
+    $('lvGame').hidden = !base;      // style.display is owned by the tab switcher
+    if (!base) return;
+    document.querySelectorAll('#lvGame .lv-man').forEach(function (e) { e.style.display = man_ ? '' : 'none'; });
+    var src = S.edition === 'manual' ? 'Manual scoring' : (S.config && S.config.source ? 'Source: ' + String(S.config.source).toUpperCase() : '');
+    $('lvSrc').textContent = src;
+    $('lvFeedHint').hidden = man_;
+    $('lvFeedHint').textContent = man_ ? '' : 'The data feed fills this in. To score by hand, set Game data source to Manual entry on the Scoring tab.';
+    var batting = (g.half || 'top') === 'top' ? 'away' : 'home';
+    ['away', 'home'].forEach(function (side) {
+      var t = g[side] || {}, el = document.querySelector('#lvGame .lv-team.' + side);
+      el.querySelector('.ab').textContent = t.abbr || side.toUpperCase();
+      el.querySelector('.r').textContent = t.runs || 0;
+      el.classList.toggle('bat', batting === side && !g.isFinal);
+    });
+    $('lvInn').textContent = g.isFinal ? 'FINAL' : ((g.half || 'top') === 'top' ? '▲ ' : '▼ ') + (g.inning || 1);
+    var bs = g.bases || {};
+    document.querySelectorAll('#lvBases [data-lb]').forEach(function (b) { b.classList.toggle('on', !!bs[b.dataset.lb]); b.disabled = !man_; });
+    var c = '';
+    [['Balls', 'balls', 3, ''], ['Strikes', 'strikes', 2, ''], ['Outs', 'outs', 2, ' o']].forEach(function (x) {
+      c += '<div class="ln' + x[3] + '"><span>' + x[0] + '</span>';
+      for (var i = 1; i <= x[2]; i++) c += '<i class="' + ((g[x[1]] || 0) >= i ? 'on' : '') + '"></i>';
+      c += '</div>';
+    });
+    $('lvCount').innerHTML = c;
+    var bt = g.batter || {}, pt = g.pitcher || {}, ptd = pt.today || {};
+    $('lvBat').innerHTML = '<b>AB</b>' + GFX.esc((bt.number ? '#' + bt.number + ' ' : '') + (bt.name || '-') + (bt.pos ? ', ' + bt.pos : '') + ((bt.today && bt.today.line) ? '  ' + bt.today.line : ''));
+    $('lvPit').innerHTML = '<b>P</b>' + GFX.esc((pt.number ? '#' + pt.number + ' ' : '') + (pt.name || '-') + (ptd.pc != null && ptd.pc !== '' ? '  ' + ptd.pc + ' pitches' : ''));
+  }
+
+  // Manual scoring pad. Each action works on a copy of ui.manual and sends only the parts that changed.
+  var LV_KEYS = ['away', 'home', 'inning', 'half', 'balls', 'strikes', 'outs', 'bases', 'linescore', 'batter', 'pitcher', 'batIdx', 'pitcherBy'];
+  var lvUndo = [];
+  // Taps can come faster than the server echoes state back, so the pad works from its own copy while any send is
+  // in flight, and sends go out one at a time in order. With nothing pending it follows the server again.
+  var lvLocal = null, lvPending = 0, lvAhead = false, lvQueue = Promise.resolve();
+  function lvMerge(base, patch) {
+    Object.keys(patch).forEach(function (k) {
+      var v = patch[k];
+      if (v && typeof v === 'object' && !Array.isArray(v) && base[k] && typeof base[k] === 'object' && !Array.isArray(base[k])) lvMerge(base[k], v);
+      else base[k] = v;
+    });
+    return base;
+  }
+  function lvClone() { return JSON.parse(JSON.stringify((lvPending || lvAhead) && lvLocal ? lvLocal : man())); }
+  function lvOnUi() { if (!lvPending) lvAhead = false; }     // server state has caught up with every send
+  function lvPost(p) {
+    lvLocal = lvMerge(lvClone(), JSON.parse(JSON.stringify(p)));
+    lvPending++; lvAhead = true;
+    lvQueue = lvQueue.then(function () { return post('/api/ui', { manual: p }); }).catch(function () { toast('Score update failed: check the server'); })
+      .then(function () { lvPending--; });
+  }
+  function lvSend(w, orig) {
+    var p = {};
+    LV_KEYS.forEach(function (k) {
+      if (JSON.stringify(w[k]) === JSON.stringify(orig[k])) return;
+      var v = w[k];
+      // the server merges objects, so a key the new state lacks (an undo) must be sent as null to clear it
+      if (v && orig[k] && typeof v === 'object' && typeof orig[k] === 'object' && !Array.isArray(v)) {
+        v = JSON.parse(JSON.stringify(v));
+        Object.keys(orig[k]).forEach(function (x) { if (!(x in v)) v[x] = null; });
+      }
+      p[k] = v;
+    });
+    if (Object.keys(p).length) lvPost(p);
+  }
+  function lvBat(w) { return (w.half || 'top') === 'top' ? 'away' : 'home'; }
+  function lvNum(v) { return Number(v) || 0; }
+  function lvRuns(w, side, n) {
+    if (!n) return;
+    w[side] = w[side] || {};
+    w[side].runs = Math.max(0, lvNum(w[side].runs) + n);
+    var ls = w.linescore = w.linescore || { away: [], home: [] }, row = ls[side] = ls[side] || [], idx = (w.inning || 1) - 1;
+    while (row.length <= idx) row.push(0);
+    row[idx] = Math.max(0, lvNum(row[idx]) + n);
+  }
+  function lvPitch(w) { w.pitcher = w.pitcher || {}; w.pitcher.pc = String(lvNum(w.pitcher.pc) + 1); }
+  function lvNext(w) {
+    w.balls = 0; w.strikes = 0;
+    var side = lvBat(w), rows = (S.game && S.game[side] && S.game[side].lineup) || [];
+    if (!rows.length) return;
+    w.batIdx = w.batIdx || {};
+    var i = w.batIdx[side] == null ? 0 : (lvNum(w.batIdx[side]) + 1) % rows.length, r = rows[i];
+    w.batIdx[side] = i;
+    w.batter = { name: r.name || '', number: r.number || '', pos: r.pos || '', bats: '', avg: r.avg || '', hr: '', rbi: '', ops: '', line: '' };
+  }
+  function lvHalf(w) {
+    var oldField = lvBat(w) === 'away' ? 'home' : 'away';
+    w.pitcherBy = w.pitcherBy || {};
+    w.pitcherBy[oldField] = JSON.parse(JSON.stringify(w.pitcher || {}));
+    if ((w.half || 'top') === 'top') w.half = 'bottom'; else { w.half = 'top'; w.inning = (w.inning || 1) + 1; }
+    w.balls = 0; w.strikes = 0; w.outs = 0; w.bases = { '1': false, '2': false, '3': false };
+    var newField = lvBat(w) === 'away' ? 'home' : 'away';
+    w.pitcher = w.pitcherBy[newField] ? JSON.parse(JSON.stringify(w.pitcherBy[newField])) :
+      { name: '', number: '', throws: '', era: '', pc: '', ip: '', k: '', line: '' };
+    lvNext(w);
+  }
+  function lvOut(w, k) {
+    w.outs = lvNum(w.outs) + 1;
+    if (k) { w.pitcher = w.pitcher || {}; w.pitcher.k = String(lvNum(w.pitcher.k) + 1); }
+    if (w.outs >= 3) lvHalf(w); else lvNext(w);
+  }
+  function lvAdvance(w, n) {      // every runner and the batter move up n bases; anyone reaching home scores
+    var b = w.bases || {}, nb = { '1': false, '2': false, '3': false }, runs = 0;
+    [3, 2, 1].forEach(function (x) { if (b[x]) { if (x + n >= 4) runs++; else nb[x + n] = true; } });
+    if (n >= 4) runs++; else nb[n] = true;
+    w.bases = nb; lvRuns(w, lvBat(w), runs);
+  }
+  function lvWalk(w) {            // forced runners only
+    var b = w.bases || {}, nb = { '1': true, '2': !!b[2], '3': !!b[3] };
+    if (b[1]) { if (b[2]) { if (b[3]) lvRuns(w, lvBat(w), 1); nb[3] = true; } nb[2] = true; }
+    w.bases = nb;
+  }
+  var LV_ACT = {
+    ball: function (w) { lvPitch(w); w.balls = lvNum(w.balls) + 1; if (w.balls >= 4) { lvWalk(w); lvNext(w); } },
+    strike: function (w) { lvPitch(w); w.strikes = lvNum(w.strikes) + 1; if (w.strikes >= 3) lvOut(w, true); },
+    foul: function (w) { lvPitch(w); if (lvNum(w.strikes) < 2) w.strikes = lvNum(w.strikes) + 1; },
+    out: function (w) { lvPitch(w); lvOut(w, false); },
+    walk: function (w) { lvWalk(w); lvNext(w); },
+    h1: function (w) { lvPitch(w); lvHit(w, 1); }, h2: function (w) { lvPitch(w); lvHit(w, 2); },
+    h3: function (w) { lvPitch(w); lvHit(w, 3); }, hr: function (w) { lvPitch(w); lvHit(w, 4); },
+    error: function (w) { lvPitch(w); var f = lvBat(w) === 'away' ? 'home' : 'away'; w[f] = w[f] || {}; w[f].errors = lvNum(w[f].errors) + 1; lvAdvance(w, 1); lvNext(w); },
+    next: function (w) { lvNext(w); },
+    half: function (w) { lvHalf(w); }
+  };
+  function lvHit(w, n) { var s = lvBat(w); w[s] = w[s] || {}; w[s].hits = lvNum(w[s].hits) + 1; lvAdvance(w, n); lvNext(w); }
+  function lvDo(act) {
+    if (!liveManual()) return;
+    if (act === 'undo') {
+      var prev = lvUndo.pop(); if (!prev) { toast('Nothing to undo'); return; }
+      lvSend(prev, lvClone()); toast('Undone'); return;
+    }
+    var orig = lvClone(), w = lvClone();
+    LV_ACT[act](w);
+    lvUndo.push(orig); if (lvUndo.length > 40) lvUndo.shift();
+    lvSend(w, orig);
+    if (act === 'strike' && orig.strikes >= 2) toast('Strikeout');
+    if (act === 'ball' && orig.balls >= 3) toast('Walk');
+    if ((w.inning !== orig.inning || w.half !== orig.half) && act !== 'half') toast('Three outs: ' + (w.half === 'top' ? 'top' : 'bottom') + ' ' + w.inning);
+  }
+  document.querySelectorAll('#lvPad [data-act]').forEach(function (b) { b.onclick = function () { lvDo(b.dataset.act); }; });
+  $('lvHalf').onclick = function () { lvDo('half'); };
+  document.querySelectorAll('#lvGame [data-run]').forEach(function (b) {
+    b.onclick = function () {
+      if (!liveManual()) return;
+      var side = b.closest('.lv-team').dataset.side, orig = lvClone(), w = lvClone();
+      lvRuns(w, side, Number(b.dataset.run)); lvUndo.push(orig); lvSend(w, orig);
+    };
+  });
+  document.querySelectorAll('#lvBases [data-lb]').forEach(function (b) {
+    b.onclick = function () {
+      if (!liveManual()) return;
+      var orig = lvClone(), w = lvClone(); w.bases = w.bases || {}; w.bases[b.dataset.lb] = !w.bases[b.dataset.lb];
+      lvUndo.push(orig); lvSend(w, orig);
+    };
+  });
+
+  // Hot buttons: ui.favorites (list of graphic ids), keys 1-9, 0 and Shift for 11-20.
+  var lvEditing = false;
+  function favs() { return ((S.ui && S.ui.favorites) || []).slice(0, 20); }
+  function saveFavs(a) { post('/api/ui', { favorites: a.slice(0, 20) }); }
+  function keyLabel(i) { return (i >= 10 ? '⇧' : '') + ((i % 10) === 9 ? '0' : String((i % 10) + 1)); }
+  function renderHot() {
+    var defs = defsAll(), vis = visAll(), f = favs(), box = $('lvHot');
+    var sig = JSON.stringify([f, lvEditing, f.map(function (g) { return defs[g] ? (defs[g].name || g) + (vis[g] ? 1 : 0) : '-'; })]);
+    if (box._sig !== sig) {
+      box._sig = sig;
+      box.innerHTML = f.length ? '' : '<div class="hint" style="grid-column:1/-1;margin:0">No hot buttons yet. Click Edit to pick the graphics you use every game.</div>';
+      f.forEach(function (gid, i) {
+        var d = defs[gid], nm = splitName(d ? d.name || gid : gid);
+        var wrap = document.createElement('div');
+        var b = document.createElement('button'); b.className = 'hb' + (d ? '' : ' missing') + (vis[gid] ? ' on' : '');
+        b.innerHTML = '<span class="k"></span><span class="n"></span><span class="st"></span>';
+        b.querySelector('.k').textContent = keyLabel(i);
+        b.querySelector('.n').textContent = nm[0];
+        b.querySelector('.st').textContent = d ? (nm[1] || d.group || '') : 'not loaded (pick All styles or another set)';
+        b.style.width = '100%';
+        b.onclick = function () { if (!lvEditing) takeGfx(gid); };
+        wrap.appendChild(b);
+        if (lvEditing) {
+          var ed = document.createElement('div'); ed.className = 'ed';
+          ed.innerHTML = '<button data-x="up" title="Move earlier">&#9650;</button><button data-x="dn" title="Move later">&#9660;</button><button data-x="rm" title="Remove">&#10005;</button>';
+          ed.querySelectorAll('button').forEach(function (eb) {
+            eb.onclick = function () {
+              var a = favs(), j = i + (eb.dataset.x === 'up' ? -1 : 1);
+              if (eb.dataset.x === 'rm') a.splice(i, 1);
+              else if (j >= 0 && j < a.length) { var t = a[i]; a[i] = a[j]; a[j] = t; }
+              saveFavs(a);
+            };
+          });
+          wrap.appendChild(ed);
+        }
+        box.appendChild(wrap);
+      });
+    } else {
+      box.querySelectorAll('.hb').forEach(function (b, i) { b.classList.toggle('on', !!vis[f[i]]); });
+    }
+    $('lvFind').hidden = !lvEditing;
+    $('lvHotEdit').textContent = lvEditing ? 'Done' : 'Edit';
+    if (lvEditing) renderFind();
+  }
+  function renderFind() {
+    var defs = defsAll(), f = favs(), words = $('lvFindQ').value.toLowerCase().split(/\s+/).filter(Boolean);
+    var ids = Object.keys(defs).filter(function (g) {
+      var d = defs[g], sp = d.sport || 'baseball';
+      if (d.layout && !d.presetId) return false;
+      if (sp !== 'all' && sp !== curSport()) return false;
+      var nm = (d.name || g).toLowerCase();
+      return words.every(function (w) { return nm.indexOf(w) >= 0; });
+    }).sort(function (a, b) { return (defs[a].name || a).localeCompare(defs[b].name || b); });
+    var res = $('lvFindRes'), more = ids.length > 80;
+    res.innerHTML = '';
+    ids.slice(0, 80).forEach(function (g) {
+      var b = document.createElement('button'), inF = f.indexOf(g) >= 0;
+      b.className = inF ? 'in' : ''; b.textContent = (inF ? '✓ ' : '+ ') + (defs[g].name || g);
+      b.onclick = function () {
+        var a = favs(), k = a.indexOf(g);
+        if (k >= 0) a.splice(k, 1); else { if (a.length >= 20) { toast('20 hot buttons at most'); return; } a.push(g); }
+        saveFavs(a);
+      };
+      res.appendChild(b);
+    });
+    if (more) { var h = document.createElement('div'); h.className = 'hint'; h.style.gridColumn = '1/-1'; h.textContent = ids.length + ' matches: type more to narrow.'; res.appendChild(h); }
+  }
+  $('lvHotEdit').onclick = function (e) { e.stopPropagation(); lvEditing = !lvEditing; renderHot(); if (lvEditing) $('lvFindQ').focus(); };
+  $('lvFindQ').oninput = debounce(renderFind, 120);
+  function renderLive() { renderAir(); renderLiveGame(); renderHot(); }
+
+  // Keyboard: hot buttons on LIVE / GRAPHICS / ALL; scoring keys on LIVE when scoring by hand; / jumps to search.
+  document.addEventListener('keydown', function (e) {
+    var t = e.target && e.target.tagName;
+    if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT' || e.ctrlKey || e.altKey || e.metaKey || e.repeat) return;
+    if (PANEL !== 'live' && PANEL !== 'graphics' && PANEL !== '') return;
+    var m = /^Digit(\d)$/.exec(e.code);
+    if (m) {
+      var i = (m[1] === '0' ? 9 : Number(m[1]) - 1) + (e.shiftKey ? 10 : 0), g = favs()[i];
+      if (g) { e.preventDefault(); takeGfx(g); }
+      return;
+    }
+    if (e.key === '/' && PANEL !== 'live') { e.preventDefault(); $('tkQ').focus(); return; }
+    if (PANEL !== 'live' || !liveManual() || e.shiftKey) return;
+    var act = { KeyB: 'ball', KeyS: 'strike', KeyF: 'foul', KeyO: 'out', KeyW: 'walk', KeyN: 'next', KeyZ: 'undo' }[e.code];
+    if (act) { e.preventDefault(); lvDo(act); }
+  });
+
+  function renderAll() { renderLive(); renderSets(); renderTakes(); renderStatus(); renderCustom(); renderNotes(); renderCustomPanel(); renderSource(); renderTeams(); renderManual(); renderUrls(); renderSponsors(true); renderPhotos(true); renderPodcast(); renderOps(); }
+
+  $('bAllOff').onclick = function () { post('/api/alloff', { keep: $('keepBug').checked ? ['scorebug'] : [] }); };
+
+  GFX.connect(function (msg) {
+    var d = msg.data;
+    if (msg.type === 'full' && d.version && window.__bbgVersion && d.version !== window.__bbgVersion) { location.reload(); return; }
+    if (msg.type === 'full') { window.__bbgVersion = d.version || window.__bbgVersion;
+      if (d.serverNow) GFX.serverOffset = d.serverNow - Date.now();
+      S.sports = d.sports || S.sports || [];
+      S.edition = d.edition || 'full'; document.body.classList.toggle('ed-manual', S.edition === 'manual');
+      if (S.edition === 'manual' && !window.__bbgManOpen) { window.__bbgManOpen = true; $('manCard').open = true; } }
+    if (msg.type === 'full') { S.categories = d.categories || S.categories; S.game = d.game; S.ui = d.ui; S.templates = d.templates; S.status = d.status; S.config = d.config; renderAll(); renderSport();
+      if (d.replay && d.replay.active) rpLoadSteps(); else rpRender({ active: false }); }
+    else if (msg.type === 'replay') { if (d.active && RP.steps.length !== d.count) rpLoadSteps(); else rpRender(d); }
+    else if (msg.type === 'game') { S.game = d; renderLiveGame(); renderAir(); if (curSport() !== 'baseball') renderSport(); renderTakes(); renderStatus(); renderPicker(); if ($('phCard').open) renderPhotos();
+      if (d.replay && RP.info.active && d.replay.idx !== RP.info.idx) rpRender(d.replay); }
+    else if (msg.type === 'ui') { S.ui = d; lvOnUi(); renderLive(); renderSport(); renderSets(); renderTakes(); renderCustom(); renderNotes(); renderCustomPanel(); renderManual(); renderSponsors(); renderPodcast(); renderOps(); }
+    else if (msg.type === 'status') { S.status = d; renderStatus(); }
+    else if (msg.type === 'templates') { S.templates = d; renderLive(); renderTakes(); renderUrls(); renderSponsors(true); renderPodcast(); renderOps(); }
+    else if (msg.type === 'config') { S.config = d; srcVis(); renderLiveGame(); }
+  }, function (ok) { if (!ok) { $('dot').className = 'dot bad'; $('msg').textContent = 'Server not reachable. Is the OBS script loaded?'; } }, 'view=control');
+})();
+</script>
+</body>
+</html>

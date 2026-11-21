@@ -1,0 +1,1 @@
+Drop TTF / OTF / WOFF / WOFF2 font files here, or upload them in the editor. The font name is the file name, e.g. 'Gotham Bold.otf' becomes the font 'Gotham Bold'. Fonts installed in Windows can also be used by typing their name.
